@@ -178,16 +178,13 @@ tr:last-child td{border-bottom:none}
   .db-grid{grid-template-columns:1fr}
 }
 
-/* ===== Tela de acesso protegida + ajustes finais ===== */
+/* ===== V14-MERGE: tela de acesso + menu mobile corrigido ===== */
 body.app-locked{display:block;min-height:100vh}
-body.app-locked .sb,
-body.app-locked .main-wrapper,
-body.app-locked #sb-toggle,
-body.app-locked #sb-backdrop{display:none!important}
+body.app-locked .sb,body.app-locked .main-wrapper,body.app-locked #sb-toggle,body.app-locked #sb-backdrop{display:none!important}
 .access-screen{position:fixed;inset:0;z-index:5000;display:flex;align-items:center;justify-content:center;padding:24px;background:radial-gradient(circle at top,#172554 0,#0f1117 42%,#020617 100%)}
 body:not(.app-locked) .access-screen{display:none!important}.access-card{width:100%;max-width:440px;background:rgba(15,23,42,.96);border:1px solid #334155;border-radius:18px;padding:30px;box-shadow:0 24px 70px rgba(0,0,0,.55);text-align:center}.access-logo{width:62px;height:62px;border-radius:16px;background:#10b981;color:#fff;display:flex;align-items:center;justify-content:center;font-size:42px;font-weight:900;margin:0 auto 16px;box-shadow:0 16px 36px rgba(16,185,129,.25)}.access-kicker{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:1.3px;color:#60a5fa;margin-bottom:8px}.access-card h1{font-size:26px;line-height:1.15;margin-bottom:10px;color:#f8fafc}.access-card p{font-size:14px;line-height:1.6;color:#94a3b8;margin-bottom:20px}.access-field{text-align:left;margin-bottom:12px}.access-field label{display:block;font-size:12px;font-weight:800;color:#cbd5e1;margin-bottom:6px}.access-field input{width:100%;background:#020617;border:1px solid #334155;border-radius:10px;padding:13px 14px;color:#f8fafc;font-size:15px;outline:none}.access-field input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.18)}.access-btn{width:100%;border:0;border-radius:10px;background:#3b82f6;color:#fff;padding:13px 16px;font-size:14px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}.access-btn:hover{background:#2563eb}.access-btn:disabled{opacity:.65;cursor:not-allowed}.access-error{margin-top:12px;background:#2d0a0a;border:1px solid #991b1b;color:#fecaca;border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.45;text-align:left}.access-note{margin-top:14px;font-size:11px;color:#64748b;line-height:1.55}
 .install-card{background:linear-gradient(135deg,#0f172a,#172554);border:1px solid #1d4ed8;border-radius:10px;padding:16px;margin-top:18px}.install-card h4{font-size:14px;margin-bottom:8px;color:#f1f5f9;display:flex;align-items:center;gap:8px}.install-card p{font-size:12px;color:#bfdbfe;line-height:1.6;margin-bottom:12px}.install-steps{display:flex;flex-direction:column;gap:10px;margin:4px 0 14px}.install-step{display:flex;gap:10px;align-items:flex-start;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px}.install-step-num{width:24px;height:24px;border-radius:50%;background:#2563eb;color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex-shrink:0}.install-step-text{font-size:13px;color:#e2e8f0;line-height:1.55}.install-code{font-family:Consolas,monospace;background:#020617;border:1px solid #334155;border-radius:5px;padding:1px 5px;color:#93c5fd;word-break:break-all}
-@media (max-width:768px){#sb-nav.sb-open ~ .main-wrapper{transform:translateX(240px);width:calc(100% - 240px)}}
+@media (max-width:768px){.sb{padding-top:58px!important}.sb-logo{padding-top:10px!important}#sb-nav.sb-open ~ .main-wrapper{transform:translateX(240px)!important;width:calc(100% - 240px)!important;transition:transform .2s ease!important}.sb-toggle{z-index:980!important}}
 
 </style>
 </head>
@@ -205,7 +202,7 @@ body:not(.app-locked) .access-screen{display:none!important}.access-card{width:1
     </div>
     <button id="access-submit-btn" class="access-btn" type="button"><i class="ti ti-lock-open"></i> Entrar no Playbook</button>
     <div id="access-error" class="access-error hidden"></div>
-    <div class="access-note">A chave é salva apenas neste navegador. Você pode removê-la depois em <b>Configurações &gt; Trocar chave de acesso</b>.</div>
+    <div class="access-note">A chave é salva apenas neste navegador. Você pode removê-la depois em <b>Configurações &gt; Remover chave salva neste navegador</b>.</div>
   </div>
 </div>
 
@@ -1385,121 +1382,26 @@ function buildCharts(calls){
 /* ===== FIM PATCH COPILOT ===== */
 
 
-/* ===== PATCH FINAL SEGURO — ACESSO, SYNC PROTEGIDO, CACHE SEGURO E EXTENSÃO ===== */
+/* ===== PATCH FINAL V14-MERGE — ACESSO, MERGE, CACHE SEGURO E EXTENSÃO ===== */
 function getAccessToken(){ return localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY) || ''; }
-function setAccessLoading(isLoading){
-  const btn=document.getElementById('access-submit-btn');
-  if(!btn) return;
-  btn.disabled=!!isLoading;
-  btn.innerHTML=isLoading?'<i class="ti ti-loader-2"></i> Validando acesso...':'<i class="ti ti-lock-open"></i> Entrar no Playbook';
-}
-function showAccessError(msg){ const el=document.getElementById('access-error'); if(el){el.textContent=msg;el.classList.remove('hidden');} }
-function clearAccessError(){ const el=document.getElementById('access-error'); if(el){el.textContent='';el.classList.add('hidden');} }
-function unlockApplication(){ document.body.classList.remove('app-locked'); setupMobileNav(); render(); updateSyncBadge(); }
-function resetAccessToken(){
-  localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
-  alert('Chave removida. A tela de acesso será exibida novamente.');
-  document.body.classList.add('app-locked');
-  const input=document.getElementById('access-token-input');
-  if(input){input.value='';setTimeout(()=>input.focus(),100);}
-}
-function loadFromStorage(){
-  const saved=localStorage.getItem(STORAGE_KEY);
-  if(saved){try{const parsed=JSON.parse(saved); if(parsed) state={...state,...parsed};}catch(e){console.error('Erro ao carregar cache local',e);}}
-}
-function saveToStorage(){
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  scheduleRemoteSync();
-}
-function scheduleRemoteSync(){
-  syncStatus='saving'; updateSyncBadge(); clearTimeout(syncTimer);
-  syncTimer=setTimeout(syncToRemote, apiReachable?25000:1200);
-}
-function syncToRemote(){
-  const token=getAccessToken();
-  if(!token){syncStatus='error';updateSyncBadge();return;}
-  if(!state.calls || state.calls.length===0){
-    console.warn('Sync bloqueado: estado local sem calls. Proteção contra sobrescrita vazia.');
-    syncStatus='error'; updateSyncBadge(); return;
-  }
-  fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:token,closer:CLOSER_NAME,state:state})})
-    .then(r=>r.json())
-    .then(data=>{
-      if(!data||data.ok===false) throw new Error(data&&data.error?data.error:'Erro ao sincronizar');
-      apiReachable=true; syncStatus='saved'; updateSyncBadge();
-    })
-    .catch(err=>{
-      console.error('Erro de sync:',err);
-      syncStatus='error'; updateSyncBadge();
-      if(String(err.message).includes('unauthorized')) resetAccessToken();
-      if(String(err.message).includes('empty_state_blocked')) alert('Proteção ativa: o backend bloqueou uma tentativa de sobrescrever o histórico com estado vazio.');
-    });
-}
-function validateTokenAndLoad(token){
-  if(!token){showAccessError('Digite a chave de acesso para continuar.');return;}
-  clearAccessError(); setAccessLoading(true);
-  const url=API_URL+'?token='+encodeURIComponent(token)+'&closer='+encodeURIComponent(CLOSER_NAME);
-  return fetch(url)
-    .then(r=>r.json())
-    .then(data=>{
-      if(!data||data.ok===false) throw new Error(data&&data.error?data.error:'unauthorized');
-      localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY,token);
-      apiReachable=true;
-      if(data.state){
-        try{
-          const parsed=JSON.parse(data.state);
-          if(parsed&&parsed.calls){state={...state,...parsed};localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}
-        }catch(e){console.error('Erro ao parsear estado remoto',e);}
-      }
-      syncStatus='saved'; unlockApplication();
-    })
-    .catch(err=>{console.error('Falha de autenticação:',err);localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);showAccessError('Chave inválida ou backend indisponível. Confira a chave e tente novamente.');})
-    .finally(()=>setAccessLoading(false));
-}
-function loadFromRemote(){
-  const token=getAccessToken();
-  if(!token) return Promise.resolve();
-  const url=API_URL+'?token='+encodeURIComponent(token)+'&closer='+encodeURIComponent(CLOSER_NAME);
-  return fetch(url).then(r=>r.json()).then(data=>{
-    apiReachable=true;
-    if(!data||data.ok===false) throw new Error(data&&data.error?data.error:'Erro ao carregar');
-    if(data.state){
-      const parsed=JSON.parse(data.state);
-      if(parsed&&parsed.calls){state={...state,...parsed};localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}
-    }
-  }).catch(err=>{console.error('Não foi possível conectar ao backend remoto.',err);if(String(err.message).includes('unauthorized')) resetAccessToken();});
-}
-function initAccessGate(){
-  loadFromStorage();
-  const input=document.getElementById('access-token-input');
-  const btn=document.getElementById('access-submit-btn');
-  const saved=getAccessToken();
-  if(btn) btn.addEventListener('click',()=>validateTokenAndLoad((input&&input.value?input.value:'').trim()));
-  if(input){input.addEventListener('keydown',e=>{if(e.key==='Enter')validateTokenAndLoad(input.value.trim());});setTimeout(()=>input.focus(),100);}
-  if(saved){if(input) input.value=saved; validateTokenAndLoad(saved);}
-}
-function clearLocalCache(){
-  const ok=confirm('Remover apenas os dados salvos neste navegador? Os dados da nuvem/Google Sheets NÃO serão apagados.');
-  if(!ok) return;
-  localStorage.removeItem(STORAGE_KEY);
-  alert('Cache local removido. A página será recarregada para buscar novamente os dados da nuvem.');
-  window.location.reload();
-}
-function getPlaybookUrlForExtension(){ return PLAYBOOK_PUBLIC_URL; }
-function escapeAttr(str){ return String(str||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function createExtensionIconBlob(){
-  return new Promise(resolve=>{const canvas=document.createElement('canvas');canvas.width=128;canvas.height=128;const ctx=canvas.getContext('2d');ctx.fillStyle='#10b981';ctx.fillRect(0,0,128,128);ctx.fillStyle='#fff';ctx.font='bold 86px Arial, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('$',64,67);canvas.toBlob(blob=>resolve(blob),'image/png');});
-}
-function openChromeExtensionInstallModal(){
-  const currentUrl=getPlaybookUrlForExtension();
-  showModal('Instalar Extensão no Chrome',`<div class="md-form"><div class="md-info">A extensão gerada usa <b>Painel Lateral</b>, com área maior, fixa e redimensionável no Chrome.</div><div class="install-steps"><div class="install-step"><div class="install-step-num">1</div><div class="install-step-text">Clique no botão abaixo para baixar os arquivos da extensão.</div></div><div class="install-step"><div class="install-step-num">2</div><div class="install-step-text">Descompacte o arquivo <span class="install-code">.zip</span>.</div></div><div class="install-step"><div class="install-step-num">3</div><div class="install-step-text">Abra <span class="install-code">chrome://extensions/</span>.</div></div><div class="install-step"><div class="install-step-num">4</div><div class="install-step-text">Ative o <b>Modo do desenvolvedor</b>.</div></div><div class="install-step"><div class="install-step-num">5</div><div class="install-step-text">Clique em <b>Carregar sem compactação</b> e selecione a pasta descompactada.</div></div></div><div class="md-info">URL usada no iframe:<br><span class="install-code">${escapeHtml(currentUrl)}</span></div><div class="md-btns"><button class="btn-secondary" onclick="closeModal()">Fechar</button><button class="btn-primary" onclick="downloadChromeExtensionZip()"><i class="ti ti-download"></i> Baixar extensao_playbook.zip</button></div></div>`);
-  const box=document.querySelector('#modal-container .md-box'); if(box) box.style.maxWidth='620px';
-}
-async function downloadChromeExtensionZip(){
-  if(typeof JSZip==='undefined'){alert('Biblioteca JSZip não carregada. Verifique sua conexão com a internet e tente novamente.');return;}
-  const playbookUrl=getPlaybookUrlForExtension();
-  const manifest={manifest_version:3,name:'Cockpit Playbook de Vendas',version:'1.2',description:'Acesso rápido ao meu scorecard e playbook em nuvem.',permissions:['sidePanel'],background:{service_worker:'background.js'},action:{default_title:'Abrir Playbook'},side_panel:{default_path:'sidepanel.html'},icons:{128:'icon.png'}};
-  const backgroundJs=`chrome.runtime.onInstalled.addListener(() => {
+function setAccessLoading(isLoading){const btn=document.getElementById('access-submit-btn');if(!btn)return;btn.disabled=!!isLoading;btn.innerHTML=isLoading?'<i class="ti ti-loader-2"></i> Validando acesso...':'<i class="ti ti-lock-open"></i> Entrar no Playbook';}
+function showAccessError(msg){const el=document.getElementById('access-error');if(el){el.textContent=msg;el.classList.remove('hidden');}}
+function clearAccessError(){const el=document.getElementById('access-error');if(el){el.textContent='';el.classList.add('hidden');}}
+function unlockApplication(){state.active='dashboard';state.activeCallId=null;document.body.classList.remove('app-locked');setupMobileNav();render();updateSyncBadge();}
+function resetAccessToken(){localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);alert('Chave removida. A tela de acesso será exibida novamente.');document.body.classList.add('app-locked');const input=document.getElementById('access-token-input');if(input){input.value='';setTimeout(()=>input.focus(),100);}}
+function loadFromStorage(){const saved=localStorage.getItem(STORAGE_KEY);if(saved){try{const parsed=JSON.parse(saved);if(parsed)state={...state,...parsed};}catch(e){console.error('Erro ao carregar cache local',e);}}}
+function saveToStorage(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state));scheduleRemoteSync();}
+function scheduleRemoteSync(){syncStatus='saving';updateSyncBadge();clearTimeout(syncTimer);syncTimer=setTimeout(syncToRemote,apiReachable?25000:1200);}
+function syncToRemote(){const token=getAccessToken();if(!token){syncStatus='error';updateSyncBadge();return;}if(!state.calls||state.calls.length===0){console.warn('Sync bloqueado: estado local sem calls. Proteção contra sobrescrita vazia.');syncStatus='error';updateSyncBadge();return;}fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:token,closer:CLOSER_NAME,state:state})}).then(r=>r.json()).then(data=>{if(!data||data.ok===false)throw new Error(data&&data.error?data.error:'Erro ao sincronizar');apiReachable=true;syncStatus='saved';updateSyncBadge();console.log('Sync concluído:',data);}).catch(err=>{console.error('Erro de sync:',err);syncStatus='error';updateSyncBadge();if(String(err.message).includes('unauthorized'))resetAccessToken();if(String(err.message).includes('empty_state_blocked'))alert('Proteção ativa: o backend bloqueou uma tentativa de sobrescrever o histórico com estado vazio. Recarregue a página para buscar os dados da nuvem.');});}
+function validateTokenAndLoad(token){if(!token){showAccessError('Digite a chave de acesso para continuar.');return;}clearAccessError();setAccessLoading(true);const url=API_URL+'?token='+encodeURIComponent(token)+'&closer='+encodeURIComponent(CLOSER_NAME);return fetch(url).then(r=>r.json()).then(data=>{if(!data||data.ok===false)throw new Error(data&&data.error?data.error:'unauthorized');localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY,token);apiReachable=true;if(data.state){try{const parsed=JSON.parse(data.state);if(parsed&&parsed.calls){state={...state,...parsed};localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}}catch(e){console.error('Erro ao parsear estado remoto',e);}}syncStatus='saved';unlockApplication();}).catch(err=>{console.error('Falha de autenticação:',err);localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);showAccessError('Chave inválida ou backend indisponível. Confira a chave e tente novamente.');}).finally(()=>setAccessLoading(false));}
+function loadFromRemote(){const token=getAccessToken();if(!token)return Promise.resolve();const url=API_URL+'?token='+encodeURIComponent(token)+'&closer='+encodeURIComponent(CLOSER_NAME);return fetch(url).then(r=>r.json()).then(data=>{apiReachable=true;if(!data||data.ok===false)throw new Error(data&&data.error?data.error:'Erro ao carregar');if(data.state){const parsed=JSON.parse(data.state);if(parsed&&parsed.calls){state={...state,...parsed};localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}}}).catch(err=>{console.error('Não foi possível conectar ao backend remoto.',err);if(String(err.message).includes('unauthorized'))resetAccessToken();});}
+function initAccessGate(){loadFromStorage();const input=document.getElementById('access-token-input');const btn=document.getElementById('access-submit-btn');const saved=getAccessToken();if(btn)btn.addEventListener('click',()=>validateTokenAndLoad((input&&input.value?input.value:'').trim()));if(input){input.addEventListener('keydown',e=>{if(e.key==='Enter')validateTokenAndLoad(input.value.trim());});setTimeout(()=>input.focus(),100);}if(saved){if(input)input.value=saved;validateTokenAndLoad(saved);}}
+function clearLocalCache(){const ok=confirm('Remover apenas os dados salvos neste navegador? Os dados da nuvem/Google Sheets NÃO serão apagados.');if(!ok)return;localStorage.removeItem(STORAGE_KEY);alert('Cache local removido. A página será recarregada para buscar novamente os dados da nuvem.');window.location.reload();}
+function getPlaybookUrlForExtension(){return PLAYBOOK_PUBLIC_URL;}
+function escapeAttr(str){return String(str||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function createExtensionIconBlob(){return new Promise(resolve=>{const canvas=document.createElement('canvas');canvas.width=128;canvas.height=128;const ctx=canvas.getContext('2d');ctx.fillStyle='#10b981';ctx.fillRect(0,0,128,128);ctx.fillStyle='#fff';ctx.font='bold 86px Arial, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('$',64,67);canvas.toBlob(blob=>resolve(blob),'image/png');});}
+function openChromeExtensionInstallModal(){const currentUrl=getPlaybookUrlForExtension();showModal('Instalar Extensão no Chrome',`<div class="md-form"><div class="md-info">A extensão gerada usa <b>Painel Lateral</b>, com área maior, fixa e redimensionável no Chrome.</div><div class="install-steps"><div class="install-step"><div class="install-step-num">1</div><div class="install-step-text">Clique no botão abaixo para baixar os arquivos da extensão.</div></div><div class="install-step"><div class="install-step-num">2</div><div class="install-step-text">Descompacte o arquivo <span class="install-code">.zip</span>.</div></div><div class="install-step"><div class="install-step-num">3</div><div class="install-step-text">Abra <span class="install-code">chrome://extensions/</span>.</div></div><div class="install-step"><div class="install-step-num">4</div><div class="install-step-text">Ative o <b>Modo do desenvolvedor</b>.</div></div><div class="install-step"><div class="install-step-num">5</div><div class="install-step-text">Clique em <b>Carregar sem compactação</b> e selecione a pasta descompactada.</div></div></div><div class="md-btns"><button class="btn-secondary" onclick="closeModal()">Fechar</button><button class="btn-primary" onclick="downloadChromeExtensionZip()"><i class="ti ti-download"></i> Baixar extensao_playbook.zip</button></div></div>`);const box=document.querySelector('#modal-container .md-box');if(box)box.style.maxWidth='620px';}
+async function downloadChromeExtensionZip(){if(typeof JSZip==='undefined'){alert('Biblioteca JSZip não carregada. Verifique sua conexão com a internet e tente novamente.');return;}const playbookUrl=getPlaybookUrlForExtension();const manifest={manifest_version:3,name:'Cockpit Playbook de Vendas',version:'1.2',description:'Acesso rápido ao meu scorecard e playbook em nuvem.',permissions:['sidePanel'],background:{service_worker:'background.js'},action:{default_title:'Abrir Playbook'},side_panel:{default_path:'sidepanel.html'},icons:{128:'icon.png'}};const backgroundJs=`chrome.runtime.onInstalled.addListener(() => {
   if (chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
     chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(console.error);
   }
@@ -1513,8 +1415,7 @@ chrome.action.onClicked.addListener(async (tab) => {
   } catch (error) {
     console.error('Erro ao abrir o Side Panel:', error);
   }
-});`;
-  const sidepanelHtml=`<!DOCTYPE html>
+});`;const sidepanelHtml=`<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -1526,20 +1427,9 @@ chrome.action.onClicked.addListener(async (tab) => {
 <body>
   <iframe src="${escapeAttr(playbookUrl)}"></iframe>
 </body>
-</html>`;
-  const zip=new JSZip();zip.file('manifest.json',JSON.stringify(manifest,null,2));zip.file('sidepanel.html',sidepanelHtml);zip.file('background.js',backgroundJs);zip.file('icon.png',await createExtensionIconBlob());
-  const blob=await zip.generateAsync({type:'blob'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='extensao_playbook.zip';document.body.appendChild(a);a.click();URL.revokeObjectURL(a.href);a.remove();
-}
-function renderSettings(){
-  const cnt=document.getElementById('content');cnt.innerHTML='';
-  cnt.appendChild(mk('div','mod-title','Configurações e Salvaguarda de Dados'));
-  cnt.appendChild(mk('div','mod-sub','Backups, chave de acesso, limpeza segura de cache local e instalação da extensão para Google Chrome.'));
-  const box=mk('div','p-box','');box.style.background='#1a2332';box.style.borderColor='#334155';
-  box.innerHTML=`<h4 style="font-size:14px; margin-bottom:8px; color:#f1f5f9;">Exportar Registros</h4><p style="font-size:12px; color:#94a3b8; margin-bottom:14px;">Gere e faça o download de um arquivo contendo todo o seu histórico e notas para importação posterior em qualquer dispositivo.</p><button class="btn-primary" onclick="exportData()"><i class="ti ti-download"></i> Baixar Backup JSON</button><hr style="border:none; border-top:1px solid #334155; margin:24px 0;" /><h4 style="font-size:14px; margin-bottom:8px; color:#f1f5f9;">Importar Registros</h4><p style="font-size:12px; color:#94a3b8; margin-bottom:14px;">⚠️ Atenção: Ao importar, os registros atuais salvos neste navegador serão substituídos pelo arquivo enviado.</p><input type="file" id="import-file-field" class="md-input" accept=".json" style="max-width:300px; margin-bottom:14px; display:block;" /><button class="btn-secondary" onclick="importData()" style="color:#4ade80; border-color:#166534;"><i class="ti ti-upload"></i> Restaurar Banco de Dados</button><hr style="border:none; border-top:1px solid #334155; margin:24px 0;" /><h4 style="font-size:14px; margin-bottom:8px; color:#f1f5f9;">Segurança</h4><p style="font-size:12px; color:#94a3b8; margin-bottom:14px;">Remove a chave salva neste navegador. O playbook será bloqueado até uma nova chave válida ser informada.</p><button class="btn-secondary" onclick="resetAccessToken()" style="color:#fbbf24; border-color:#78350f;"><i class="ti ti-key"></i> Trocar chave de acesso</button><hr style="border:none; border-top:1px solid #334155; margin:24px 0;" /><h4 style="font-size:14px; margin-bottom:8px; color:#f1f5f9;">Limpar Cache Local</h4><p style="font-size:12px; color:#94a3b8; margin-bottom:14px;">Remove apenas os dados deste navegador. A página será recarregada e buscará novamente os dados da nuvem. Não sobrescreve o Google Sheets com estado vazio.</p><button class="btn-secondary" onclick="clearLocalCache()" style="color:#f87171; border-color:#991b1b;"><i class="ti ti-trash"></i> Limpar apenas este navegador</button>`;
-  cnt.appendChild(box);
-  const install=mk('div','install-card');install.innerHTML=`<h4><i class="ti ti-brand-chrome"></i> Instalação como Extensão Side Panel</h4><p>Crie um pacote leve para abrir este Cockpit direto no painel lateral do Chrome, usando a URL pública correta do GitHub Pages: <span class="install-code">${PLAYBOOK_PUBLIC_URL}</span></p><button class="btn-primary" onclick="openChromeExtensionInstallModal()"><i class="ti ti-puzzle"></i> Instalar Extensão no Chrome</button>`;cnt.appendChild(install);
-}
-/* ===== FIM PATCH FINAL SEGURO ===== */
+</html>`;const zip=new JSZip();zip.file('manifest.json',JSON.stringify(manifest,null,2));zip.file('sidepanel.html',sidepanelHtml);zip.file('background.js',backgroundJs);zip.file('icon.png',await createExtensionIconBlob());const blob=await zip.generateAsync({type:'blob'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='extensao_playbook.zip';document.body.appendChild(a);a.click();URL.revokeObjectURL(a.href);a.remove();}
+function renderSettings(){const cnt=document.getElementById('content');cnt.innerHTML='';cnt.appendChild(mk('div','mod-title','Configurações e Salvaguarda de Dados'));cnt.appendChild(mk('div','mod-sub','Backups, chave de acesso, limpeza segura de cache local e instalação da extensão para Google Chrome.'));const box=mk('div','p-box','');box.style.background='#1a2332';box.style.borderColor='#334155';box.innerHTML=`<h4 style="font-size:14px; margin-bottom:8px; color:#f1f5f9;">Exportar Registros</h4><p style="font-size:12px; color:#94a3b8; margin-bottom:14px;">Gere e faça o download de um arquivo contendo todo o seu histórico e notas para importação posterior em qualquer dispositivo.</p><button class="btn-primary" onclick="exportData()"><i class="ti ti-download"></i> Baixar Backup JSON</button><hr style="border:none; border-top:1px solid #334155; margin:24px 0;" /><h4 style="font-size:14px; margin-bottom:8px; color:#f1f5f9;">Importar Registros</h4><p style="font-size:12px; color:#94a3b8; margin-bottom:14px;">⚠️ Atenção: Ao importar, os registros atuais salvos neste navegador serão substituídos pelo arquivo enviado.</p><input type="file" id="import-file-field" class="md-input" accept=".json" style="max-width:300px; margin-bottom:14px; display:block;" /><button class="btn-secondary" onclick="importData()" style="color:#4ade80; border-color:#166534;"><i class="ti ti-upload"></i> Restaurar Banco de Dados</button><hr style="border:none; border-top:1px solid #334155; margin:24px 0;" /><h4 style="font-size:14px; margin-bottom:8px; color:#f1f5f9;">Segurança</h4><p style="font-size:12px; color:#94a3b8; margin-bottom:14px;">Remove a chave salva neste navegador. O playbook será bloqueado até uma nova chave válida ser informada.</p><button class="btn-secondary" onclick="resetAccessToken()" style="color:#fbbf24; border-color:#78350f;"><i class="ti ti-key"></i> Remover chave salva neste navegador</button><hr style="border:none; border-top:1px solid #334155; margin:24px 0;" /><h4 style="font-size:14px; margin-bottom:8px; color:#f1f5f9;">Limpar Cache Local</h4><p style="font-size:12px; color:#94a3b8; margin-bottom:14px;">Remove apenas os dados deste navegador. A página será recarregada e buscará novamente os dados da nuvem. Não sobrescreve o Google Sheets com estado vazio.</p><button class="btn-secondary" onclick="clearLocalCache()" style="color:#f87171; border-color:#991b1b;"><i class="ti ti-trash"></i> Limpar apenas este navegador</button>`;cnt.appendChild(box);const install=mk('div','install-card');install.innerHTML=`<h4><i class="ti ti-brand-chrome"></i> Instalação como Extensão Side Panel</h4><p>Crie um pacote leve para abrir este Cockpit direto no painel lateral do Chrome.</p><button class="btn-primary" onclick="openChromeExtensionInstallModal()"><i class="ti ti-puzzle"></i> Instalar Extensão no Chrome</button>`;cnt.appendChild(install);}
+/* ===== FIM PATCH FINAL V14-MERGE ===== */
 
 initAccessGate();
 </script>
