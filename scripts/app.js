@@ -402,10 +402,33 @@ function submitEndCall() {
 
 function deleteCall(id) {
   if(confirm('Tem certeza de que deseja apagar permanentemente o registro desta call?')) {
+    const token = getAccessToken();
     state.calls = state.calls.filter(c => c.id !== id);
     if(state.activeCallId === id) state.activeCallId = null;
-    saveToStorage();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     render();
+
+    if(token){
+      syncStatus = 'saving';
+      updateSyncBadge();
+      fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'deleteCall', token: token, closer: CLOSER_NAME, id: id })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if(!data || data.ok === false) throw new Error(data && data.error ? data.error : 'Erro ao apagar');
+        syncStatus = 'saved';
+        updateSyncBadge();
+        console.log('Call marcada como excluída em Calls_v2:', data);
+      })
+      .catch(err => {
+        console.error('Erro ao apagar call em Calls_v2:', err);
+        syncStatus = 'error';
+        updateSyncBadge();
+      });
+    }
   }
 }
 
@@ -1061,10 +1084,109 @@ function unlockApplication(){state.active='dashboard';state.activeCallId=null;do
 function resetAccessToken(){localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);alert('Chave removida. A tela de acesso será exibida novamente.');document.body.classList.add('app-locked');const input=document.getElementById('access-token-input');if(input){input.value='';setTimeout(()=>input.focus(),100);}}
 function loadFromStorage(){const saved=localStorage.getItem(STORAGE_KEY);if(saved){try{const parsed=JSON.parse(saved);if(parsed)state={...state,...parsed};}catch(e){console.error('Erro ao carregar cache local',e);}}}
 function saveToStorage(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state));scheduleRemoteSync();}
-function scheduleRemoteSync(){syncStatus='saving';updateSyncBadge();clearTimeout(syncTimer);syncTimer=setTimeout(syncToRemote,apiReachable?25000:1200);}
-function syncToRemote(){const token=getAccessToken();if(!token){syncStatus='error';updateSyncBadge();return;}if(!state.calls||state.calls.length===0){console.warn('Sync bloqueado: estado local sem calls. Proteção contra sobrescrita vazia.');syncStatus='error';updateSyncBadge();return;}fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:token,closer:CLOSER_NAME,state:state})}).then(r=>r.json()).then(data=>{if(!data||data.ok===false)throw new Error(data&&data.error?data.error:'Erro ao sincronizar');apiReachable=true;syncStatus='saved';updateSyncBadge();console.log('Sync concluído:',data);}).catch(err=>{console.error('Erro de sync:',err);syncStatus='error';updateSyncBadge();if(String(err.message).includes('unauthorized'))resetAccessToken();if(String(err.message).includes('empty_state_blocked'))alert('Proteção ativa: o backend bloqueou uma tentativa de sobrescrever o histórico com estado vazio. Recarregue a página para buscar os dados da nuvem.');});}
-function validateTokenAndLoad(token){if(!token){showAccessError('Digite a chave de acesso para continuar.');return;}clearAccessError();setAccessLoading(true);const url=API_URL+'?token='+encodeURIComponent(token)+'&closer='+encodeURIComponent(CLOSER_NAME);return fetch(url).then(r=>r.json()).then(data=>{if(!data||data.ok===false)throw new Error(data&&data.error?data.error:'unauthorized');localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY,token);apiReachable=true;if(data.state){try{const parsed=JSON.parse(data.state);if(parsed&&parsed.calls){state={...state,...parsed};localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}}catch(e){console.error('Erro ao parsear estado remoto',e);}}syncStatus='saved';unlockApplication();}).catch(err=>{console.error('Falha de autenticação:',err);localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);showAccessError('Chave inválida ou backend indisponível. Confira a chave e tente novamente.');}).finally(()=>setAccessLoading(false));}
-function loadFromRemote(){const token=getAccessToken();if(!token)return Promise.resolve();const url=API_URL+'?token='+encodeURIComponent(token)+'&closer='+encodeURIComponent(CLOSER_NAME);return fetch(url).then(r=>r.json()).then(data=>{apiReachable=true;if(!data||data.ok===false)throw new Error(data&&data.error?data.error:'Erro ao carregar');if(data.state){const parsed=JSON.parse(data.state);if(parsed&&parsed.calls){state={...state,...parsed};localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}}}).catch(err=>{console.error('Não foi possível conectar ao backend remoto.',err);if(String(err.message).includes('unauthorized'))resetAccessToken();});}
+function scheduleRemoteSync(){
+  syncStatus = 'saving';
+  updateSyncBadge();
+  clearTimeout(syncTimer);
+  const delay = apiReachable ? 15000 : 1200;
+  syncTimer = setTimeout(syncToRemote, delay);
+}
+function syncToRemote(){
+  const token = getAccessToken();
+  if(!token){
+    syncStatus = 'error';
+    updateSyncBadge();
+    return;
+  }
+
+  const calls = Array.isArray(state.calls) ? state.calls : [];
+
+  fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({
+      action: 'saveCalls',
+      token: token,
+      closer: CLOSER_NAME,
+      calls: calls
+    })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if(!data || data.ok === false) throw new Error(data && data.error ? data.error : 'Erro ao sincronizar');
+    apiReachable = true;
+    syncStatus = 'saved';
+    updateSyncBadge();
+    console.log('Sync Calls_v2 concluído:', data);
+  })
+  .catch(err => {
+    console.error('Erro de sync Calls_v2:', err);
+    syncStatus = 'error';
+    updateSyncBadge();
+    if(String(err.message).includes('unauthorized')) resetAccessToken();
+  });
+}
+function fetchCallsV2Remote(token){
+  const url = API_URL + '?action=getCalls&token=' + encodeURIComponent(token) + '&closer=' + encodeURIComponent(CLOSER_NAME);
+  return fetch(url).then(r => r.json());
+}
+
+function applyCallsV2ToState(calls){
+  state = {
+    ...state,
+    active: 'dashboard',
+    activeCallId: null,
+    calls: Array.isArray(calls) ? calls : [],
+    sandboxCl: state.sandboxCl || {},
+    sandboxSc: state.sandboxSc || {}
+  };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function validateTokenAndLoad(token){
+  if(!token){
+    showAccessError('Digite a chave de acesso para continuar.');
+    return;
+  }
+
+  clearAccessError();
+  setAccessLoading(true);
+
+  return fetchCallsV2Remote(token)
+    .then(data => {
+      if(!data || data.ok === false) throw new Error(data && data.error ? data.error : 'unauthorized');
+
+      localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, token);
+      apiReachable = true;
+      applyCallsV2ToState(data.calls || []);
+
+      syncStatus = 'saved';
+      console.log('Dados carregados exclusivamente de Calls_v2:', (data.calls || []).length, 'calls');
+      unlockApplication();
+    })
+    .catch(err => {
+      console.error('Falha de autenticação/carregamento Calls_v2:', err);
+      localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+      showAccessError('Chave inválida, backend indisponível ou aba Calls_v2 ausente. Confira a chave e tente novamente.');
+    })
+    .finally(() => setAccessLoading(false));
+}
+function loadFromRemote(){
+  const token = getAccessToken();
+  if(!token) return Promise.resolve();
+
+  return fetchCallsV2Remote(token)
+    .then(data => {
+      apiReachable = true;
+      if(!data || data.ok === false) throw new Error(data && data.error ? data.error : 'Erro ao carregar');
+      applyCallsV2ToState(data.calls || []);
+      console.log('Recarregado da nuvem exclusivamente via Calls_v2:', (data.calls || []).length, 'calls');
+    })
+    .catch(err => {
+      console.error('Não foi possível conectar ao backend Calls_v2.', err);
+      if(String(err.message).includes('unauthorized')) resetAccessToken();
+    });
+}
 function initAccessGate(){loadFromStorage();const input=document.getElementById('access-token-input');const btn=document.getElementById('access-submit-btn');const saved=getAccessToken();if(btn)btn.addEventListener('click',()=>validateTokenAndLoad((input&&input.value?input.value:'').trim()));if(input){input.addEventListener('keydown',e=>{if(e.key==='Enter')validateTokenAndLoad(input.value.trim());});setTimeout(()=>input.focus(),100);}if(saved){if(input)input.value=saved;validateTokenAndLoad(saved);}}
 function clearLocalCache(){const ok=confirm('Remover apenas os dados salvos neste navegador? Os dados da nuvem/Google Sheets NÃO serão apagados.');if(!ok)return;localStorage.removeItem(STORAGE_KEY);alert('Cache local removido. A página será recarregada para buscar novamente os dados da nuvem.');window.location.reload();}
 function getPlaybookUrlForExtension(){return PLAYBOOK_PUBLIC_URL;}
