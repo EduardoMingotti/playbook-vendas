@@ -19,6 +19,27 @@ let syncTimer = null;
 let syncStatus = 'idle'; // idle | saving | saved | error
 let apiReachable = false; // confirmado por ping inicial; controla o intervalo de debounce
 
+const PRECALL_NOTES_TEMPLATE = "Perguntas que preciso fazer:\n\nInformações que preciso descobrir:\n\nDor principal:\n\nSistema atual:\n\nDecisor:\n\nCusto da inação:\n\nHipótese de solução:\n\nObservações livres:\n";
+function normalizeLeadName(str){return String(str||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');}
+function makeLeadId(name){return 'lead_'+normalizeLeadName(name).replace(/\s+/g,'_')+'_'+Date.now();}
+function ensureCallModel(call){
+  if(!call) return call;
+  if(!call.leadId) call.leadId = makeLeadId(call.leadName||'lead');
+  if(!call.meetingType) call.meetingType = 'Primeira reunião';
+  if(!call.statusHistory) call.statusHistory = [{at:new Date().toISOString(),from:'',to:call.status||'Em andamento',note:call.statusNote||call.motivoPerdido||'',source:'frontend'}];
+  if(!call.preCallNotes) call.preCallNotes = {text:PRECALL_NOTES_TEMPLATE,updatedAt:'',locked:call.status && call.status !== 'Em andamento'};
+  if(call.statusNote === undefined) call.statusNote = call.motivoPerdido || '';
+  return call;
+}
+function formatDateShort(value){
+  if(!value) return '';
+  if(/^\d{2}\/\d{2}\/\d{4}/.test(String(value))) return String(value).slice(0,10);
+  const d = new Date(value);
+  if(!isNaN(d.getTime())) return d.toLocaleDateString('pt-BR');
+  return String(value).replace(/T.*$/,'');
+}
+
+
 function saveToStorage(){
   localStorage.setItem('playbook_vendas_state', JSON.stringify(state));
   scheduleRemoteSync();
@@ -301,7 +322,7 @@ function closeModal() {
 }
 
 function initNewCallForm() {
-  showModal('Iniciar Nova Call Consultiva', `
+  showModal('Cadastrar Novo Lead', `
     <div class="md-form">
       <div class="md-group">
         <label class="md-label">Nome da Clínica / Lead</label>
@@ -401,34 +422,13 @@ function submitEndCall() {
 }
 
 function deleteCall(id) {
-  if(confirm('Tem certeza de que deseja apagar permanentemente o registro desta call?')) {
-    const token = getAccessToken();
-    state.calls = state.calls.filter(c => c.id !== id);
-    if(state.activeCallId === id) state.activeCallId = null;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if(confirm('Tem certeza de que deseja apagar este registro?')) {
+    const token=getAccessToken();
+    state.calls=state.calls.filter(c=>c.id!==id);
+    if(state.activeCallId===id) state.activeCallId=null;
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
     render();
-
-    if(token){
-      syncStatus = 'saving';
-      updateSyncBadge();
-      fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'deleteCall', token: token, closer: CLOSER_NAME, id: id })
-      })
-      .then(r => r.json())
-      .then(data => {
-        if(!data || data.ok === false) throw new Error(data && data.error ? data.error : 'Erro ao apagar');
-        syncStatus = 'saved';
-        updateSyncBadge();
-        console.log('Call marcada como excluída em Calls_v2:', data);
-      })
-      .catch(err => {
-        console.error('Erro ao apagar call em Calls_v2:', err);
-        syncStatus = 'error';
-        updateSyncBadge();
-      });
-    }
+    if(token){syncStatus='saving';updateSyncBadge();fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'deleteCall',token,closer:CLOSER_NAME,id})}).then(r=>r.json()).then(data=>{if(!data||data.ok===false)throw new Error(data&&data.error?data.error:'Erro ao apagar');syncStatus='saved';updateSyncBadge();console.log('Call excluída logicamente:',data);}).catch(err=>{console.error('Erro ao apagar:',err);syncStatus='error';updateSyncBadge();});}
   }
 }
 
@@ -574,7 +574,7 @@ function renderDashboard() {
   }
 
   const listHeader = mk('div', '', '<h3 style="font-size:16px; font-weight:600; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">Histórico de Reuniões</h3>');
-  const btnNew = mk('button', 'btn-primary', '<i class="ti ti-plus"></i> + Nova Call (Checklist Ativo)');
+  const btnNew = mk('button', 'btn-primary', '<i class="ti ti-plus"></i> Novo Lead');
   btnNew.addEventListener('click', initNewCallForm);
   listHeader.firstChild.appendChild(btnNew);
   cnt.appendChild(listHeader);
@@ -1026,7 +1026,7 @@ function getConversionStats(calls){ const demos=getDemoRealizadaCalls(calls).len
 function escapeHtml(str){ return String(str||'').replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch])); }
 
 function initNewCallForm() {
-  showModal('Iniciar Nova Call Consultiva', `
+  showModal('Cadastrar Novo Lead', `
     <div class="md-form">
       <div class="md-group"><label class="md-label">Nome da Clínica / Lead</label><input type="text" id="nc-lead" class="md-input" placeholder="Ex: Clínica São Lucas" required /></div>
       <div class="md-group"><label class="md-label">SDR que Agendou</label><input type="text" id="nc-sdr" class="md-input" placeholder="Ex: João Silva" required /></div>
@@ -1038,7 +1038,16 @@ function initNewCallForm() {
 function submitNewCall() {
   const lead=document.getElementById('nc-lead').value.trim(); const sdr=document.getElementById('nc-sdr').value.trim();
   if(!lead||!sdr){alert('Por favor, preencha todos os campos obrigatórios.');return;}
-  const newCall={id:'call_'+Date.now(),leadName:lead,sdrName:sdr,isSao:false,status:'Em andamento',motivoPerdido:'',date:(()=>{const d=document.getElementById('nc-date');return d&&d.value?new Date(d.value+'T12:00:00').toLocaleDateString('pt-BR'):new Date().toLocaleDateString('pt-BR')})(),cl:{},sc:{}};
+  const leadId = makeLeadId(lead);
+  const now = new Date().toISOString();
+  const newCall=ensureCallModel({
+    id:'call_'+Date.now(), leadId, leadName:lead, sdrName:sdr, meetingType:'Primeira reunião', isSao:false,
+    status:'Em andamento', statusNote:'', motivoPerdido:'', finalObservation:'',
+    date:(()=>{const d=document.getElementById('nc-date');return d&&d.value?new Date(d.value+'T12:00:00').toLocaleDateString('pt-BR'):new Date().toLocaleDateString('pt-BR')})(),
+    statusHistory:[{at:now,from:'',to:'Em andamento',note:'',source:'novoLead'}],
+    preCallNotes:{text:PRECALL_NOTES_TEMPLATE,updatedAt:now,locked:false},
+    cl:{},sc:{}
+  });
   state.calls.push(newCall); state.activeCallId=newCall.id; state.active=1; closeModal(); saveToStorage(); render();
 }
 function openEndCallModal(){
@@ -1058,7 +1067,7 @@ function submitEndCall(){
 
 function renderDashboard(){
   const cnt=document.getElementById('content'); cnt.innerHTML=''; cnt.appendChild(mk('div','mod-title','Cockpit de Vendas Consultivas')); cnt.appendChild(mk('div','mod-sub','Histórico local, conversões de Demo realizada > SAO, SAO > Venda, Demo > Venda e auditoria estrutural de processos.'));
-  const topActions=mk('div','dash-actions'); const topLeft=mk('div','dash-actions-left'); const btnNewTop=mk('button','btn-primary','<i class="ti ti-plus"></i> Nova Call'); btnNewTop.addEventListener('click',initNewCallForm); topLeft.appendChild(btnNewTop); const searchBox=mk('div','search-wrap'); searchBox.innerHTML='<i class="ti ti-search"></i><input type="search" id="call-search" class="search-input" placeholder="Pesquisar pelo nome da clínica/lead..." value="'+escapeHtml(sessionStorage.getItem('call-search')||'')+'" />'; topLeft.appendChild(searchBox); topActions.appendChild(topLeft); cnt.appendChild(topActions); cnt.appendChild(mk('div','loading-feedback','<span class="loading-dot"></span><span>Buscando reuniões...</span>'));
+  const topActions=mk('div','dash-actions'); const topLeft=mk('div','dash-actions-left'); const btnNewTop=mk('button','btn-primary','<i class="ti ti-plus"></i> Novo Lead'); btnNewTop.addEventListener('click',initNewCallForm); topLeft.appendChild(btnNewTop); const searchBox=mk('div','search-wrap'); searchBox.innerHTML='<i class="ti ti-search"></i><input type="search" id="call-search" class="search-input" placeholder="Pesquisar pelo nome da clínica/lead..." value="'+escapeHtml(sessionStorage.getItem('call-search')||'')+'" />'; topLeft.appendChild(searchBox); topActions.appendChild(topLeft); cnt.appendChild(topActions); cnt.appendChild(mk('div','loading-feedback','<span class="loading-dot"></span><span>Buscando reuniões...</span>'));
   setTimeout(()=>{const s=document.getElementById('call-search'); if(s){let t=null; s.addEventListener('input',()=>{document.querySelector('.loading-feedback')?.classList.add('show'); clearTimeout(t); t=setTimeout(()=>{sessionStorage.setItem('call-search',s.value.trim());sessionStorage.setItem('calls-page','1');render();},250);});}},0);
   const filRow=mk('div','fil-row'); const fg1=mk('div','fil-grp'); fg1.innerHTML='<label class="fil-lbl">Data inicial</label>'; const fi1=document.createElement('input'); fi1.type='date'; fi1.id='fil-start'; fi1.className='fil-inp'; fi1.value=sessionStorage.getItem('fil-start')||''; fg1.appendChild(fi1); const fg2=mk('div','fil-grp'); fg2.innerHTML='<label class="fil-lbl">Data final</label>'; const fi2=document.createElement('input'); fi2.type='date'; fi2.id='fil-end'; fi2.className='fil-inp'; fi2.value=sessionStorage.getItem('fil-end')||''; fg2.appendChild(fi2); const bFil=mk('button','btn-primary','Filtrar'); bFil.style.cssText='align-self:flex-end;font-size:12px;padding:7px 14px'; bFil.addEventListener('click',()=>{sessionStorage.setItem('fil-start',document.getElementById('fil-start')?.value||'');sessionStorage.setItem('fil-end',document.getElementById('fil-end')?.value||'');sessionStorage.setItem('calls-page','1');state.active='dashboard';render();}); const bCmp=mk('button','btn-secondary',''); bCmp.innerHTML='<i class="ti ti-arrows-left-right" style="font-size:13px;margin-right:5px"></i>Comparar'; bCmp.style.cssText='align-self:flex-end;font-size:12px;padding:7px 12px;display:flex;align-items:center'; bCmp.addEventListener('click',openCompareModal); filRow.appendChild(fg1);filRow.appendChild(fg2);filRow.appendChild(bFil);filRow.appendChild(bCmp); cnt.appendChild(filRow);
   const _fs=sessionStorage.getItem('fil-start')||'', _fe=sessionStorage.getItem('fil-end')||''; let filteredCalls=state.calls; if(_fs||_fe){filteredCalls=state.calls.filter(c=>{if(!c.date)return true; const p=c.date.split('/'); if(p.length!==3)return true; const dt=new Date(`${p[2]}-${p[1]}-${p[0]}`).getTime(); return dt>=(_fs?new Date(_fs).getTime():0)&&dt<=(_fe?new Date(_fe+'T23:59:59').getTime():Infinity);});} const searchTerm=(sessionStorage.getItem('call-search')||'').toLowerCase(); if(searchTerm){filteredCalls=filteredCalls.filter(c=>(c.leadName||'').toLowerCase().includes(searchTerm));}
@@ -1093,99 +1102,31 @@ function scheduleRemoteSync(){
 }
 function syncToRemote(){
   const token = getAccessToken();
-  if(!token){
-    syncStatus = 'error';
-    updateSyncBadge();
-    return;
-  }
-
-  const calls = Array.isArray(state.calls) ? state.calls : [];
-
-  fetch(API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({
-      action: 'saveCalls',
-      token: token,
-      closer: CLOSER_NAME,
-      calls: calls
-    })
-  })
-  .then(r => r.json())
-  .then(data => {
-    if(!data || data.ok === false) throw new Error(data && data.error ? data.error : 'Erro ao sincronizar');
-    apiReachable = true;
-    syncStatus = 'saved';
-    updateSyncBadge();
-    console.log('Sync Calls_v2 concluído:', data);
-  })
-  .catch(err => {
-    console.error('Erro de sync Calls_v2:', err);
-    syncStatus = 'error';
-    updateSyncBadge();
-    if(String(err.message).includes('unauthorized')) resetAccessToken();
-  });
+  if(!token){ syncStatus='error'; updateSyncBadge(); return; }
+  const calls = (Array.isArray(state.calls)?state.calls:[]).map(ensureCallModel);
+  fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'saveCalls',token,closer:CLOSER_NAME,calls})})
+    .then(r=>r.json()).then(data=>{if(!data||data.ok===false)throw new Error(data&&data.error?data.error:'Erro ao sincronizar');apiReachable=true;syncStatus='saved';updateSyncBadge();console.log('Sync V09 concluído:',data);})
+    .catch(err=>{console.error('Erro de sync V09:',err);syncStatus='error';updateSyncBadge();if(String(err.message).includes('unauthorized'))resetAccessToken();});
 }
-function fetchCallsV2Remote(token){
-  const url = API_URL + '?action=getCalls&token=' + encodeURIComponent(token) + '&closer=' + encodeURIComponent(CLOSER_NAME);
-  return fetch(url).then(r => r.json());
+function fetchCallsRemote(token){
+  const url=API_URL+'?action=getCalls&token='+encodeURIComponent(token)+'&closer='+encodeURIComponent(CLOSER_NAME);
+  return fetch(url).then(r=>r.json());
 }
-
-function applyCallsV2ToState(calls){
-  state = {
-    ...state,
-    active: 'dashboard',
-    activeCallId: null,
-    calls: Array.isArray(calls) ? calls : [],
-    sandboxCl: state.sandboxCl || {},
-    sandboxSc: state.sandboxSc || {}
-  };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+function applyRemoteCallsToState(calls){
+  state={...state,active:'dashboard',activeCallId:null,calls:(Array.isArray(calls)?calls:[]).map(ensureCallModel),sandboxCl:state.sandboxCl||{},sandboxSc:state.sandboxSc||{}};
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
 }
-
 function validateTokenAndLoad(token){
-  if(!token){
-    showAccessError('Digite a chave de acesso para continuar.');
-    return;
-  }
-
-  clearAccessError();
-  setAccessLoading(true);
-
-  return fetchCallsV2Remote(token)
-    .then(data => {
-      if(!data || data.ok === false) throw new Error(data && data.error ? data.error : 'unauthorized');
-
-      localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, token);
-      apiReachable = true;
-      applyCallsV2ToState(data.calls || []);
-
-      syncStatus = 'saved';
-      console.log('Dados carregados exclusivamente de Calls_v2:', (data.calls || []).length, 'calls');
-      unlockApplication();
-    })
-    .catch(err => {
-      console.error('Falha de autenticação/carregamento Calls_v2:', err);
-      localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
-      showAccessError('Chave inválida, backend indisponível ou aba Calls_v2 ausente. Confira a chave e tente novamente.');
-    })
-    .finally(() => setAccessLoading(false));
+  if(!token){showAccessError('Digite a chave de acesso para continuar.');return;}
+  clearAccessError();setAccessLoading(true);
+  return fetchCallsRemote(token).then(data=>{if(!data||data.ok===false)throw new Error(data&&data.error?data.error:'unauthorized');localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY,token);apiReachable=true;applyRemoteCallsToState(data.calls||[]);syncStatus='saved';console.log('Dados carregados V09:',(data.calls||[]).length,'calls');unlockApplication();})
+    .catch(err=>{console.error('Falha de autenticação/carregamento V09:',err);localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);showAccessError('Chave inválida ou backend indisponível. Confira a chave e tente novamente.');})
+    .finally(()=>setAccessLoading(false));
 }
 function loadFromRemote(){
-  const token = getAccessToken();
-  if(!token) return Promise.resolve();
-
-  return fetchCallsV2Remote(token)
-    .then(data => {
-      apiReachable = true;
-      if(!data || data.ok === false) throw new Error(data && data.error ? data.error : 'Erro ao carregar');
-      applyCallsV2ToState(data.calls || []);
-      console.log('Recarregado da nuvem exclusivamente via Calls_v2:', (data.calls || []).length, 'calls');
-    })
-    .catch(err => {
-      console.error('Não foi possível conectar ao backend Calls_v2.', err);
-      if(String(err.message).includes('unauthorized')) resetAccessToken();
-    });
+  const token=getAccessToken(); if(!token)return Promise.resolve();
+  return fetchCallsRemote(token).then(data=>{apiReachable=true;if(!data||data.ok===false)throw new Error(data&&data.error?data.error:'Erro ao carregar');applyRemoteCallsToState(data.calls||[]);console.log('Recarregado da nuvem V09:',(data.calls||[]).length,'calls');})
+    .catch(err=>{console.error('Não foi possível conectar ao backend V09.',err);if(String(err.message).includes('unauthorized'))resetAccessToken();});
 }
 function initAccessGate(){loadFromStorage();const input=document.getElementById('access-token-input');const btn=document.getElementById('access-submit-btn');const saved=getAccessToken();if(btn)btn.addEventListener('click',()=>validateTokenAndLoad((input&&input.value?input.value:'').trim()));if(input){input.addEventListener('keydown',e=>{if(e.key==='Enter')validateTokenAndLoad(input.value.trim());});setTimeout(()=>input.focus(),100);}if(saved){if(input)input.value=saved;validateTokenAndLoad(saved);}}
 function clearLocalCache(){const ok=confirm('Remover apenas os dados salvos neste navegador? Os dados da nuvem/Google Sheets NÃO serão apagados.');if(!ok)return;localStorage.removeItem(STORAGE_KEY);alert('Cache local removido. A página será recarregada para buscar novamente os dados da nuvem.');window.location.reload();}
