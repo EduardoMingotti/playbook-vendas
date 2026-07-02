@@ -22,21 +22,42 @@ let apiReachable = false; // confirmado por ping inicial; controla o intervalo d
 const PRECALL_NOTES_TEMPLATE = "Perguntas que preciso fazer:\n\nInformações que preciso descobrir:\n\nDor principal:\n\nSistema atual:\n\nDecisor:\n\nCusto da inação:\n\nHipótese de solução:\n\nObservações livres:\n";
 function normalizeLeadName(str){return String(str||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');}
 function makeLeadId(name){return 'lead_'+normalizeLeadName(name).replace(/\s+/g,'_')+'_'+Date.now();}
-function ensureCallModel(call){
-  if(!call) return call;
-  if(!call.leadId) call.leadId = makeLeadId(call.leadName||'lead');
-  if(!call.meetingType) call.meetingType = 'Primeira reunião';
-  if(!call.statusHistory) call.statusHistory = [{at:new Date().toISOString(),from:'',to:call.status||'Em andamento',note:call.statusNote||call.motivoPerdido||'',source:'frontend'}];
-  if(!call.preCallNotes) call.preCallNotes = {text:PRECALL_NOTES_TEMPLATE,updatedAt:'',locked:call.status && call.status !== 'Em andamento'};
-  if(call.statusNote === undefined) call.statusNote = call.motivoPerdido || '';
-  return call;
-}
 function formatDateShort(value){
   if(!value) return '';
-  if(/^\d{2}\/\d{2}\/\d{4}/.test(String(value))) return String(value).slice(0,10);
-  const d = new Date(value);
+  const s=String(value);
+  if(/^\d{2}\/\d{2}\/\d{4}/.test(s)) return s.slice(0,10);
+  const d=new Date(s);
   if(!isNaN(d.getTime())) return d.toLocaleDateString('pt-BR');
-  return String(value).replace(/T.*$/,'');
+  const m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m) return `${m[3]}/${m[2]}/${m[1]}`;
+  return s.replace(/T.*$/,'');
+}
+function dateInputValue(value){
+  if(!value) return '';
+  const s=String(value);
+  const br=s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if(br) return `${br[3]}-${br[2]}-${br[1]}`;
+  const d=new Date(s);
+  if(!isNaN(d.getTime())) return d.toISOString().slice(0,10);
+  const iso=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return iso ? `${iso[1]}-${iso[2]}-${iso[3]}` : '';
+}
+function ensureCallModel(call){
+  if(!call) return call;
+  if(!call.leadId) call.leadId=makeLeadId(call.leadName||'lead');
+  if(!call.meetingType) call.meetingType='Primeira reunião';
+  if(!Array.isArray(call.statusHistory)) call.statusHistory=[{at:new Date().toISOString(),from:'',to:call.status||'Em andamento',note:call.statusNote||call.motivoPerdido||'',source:'frontend'}];
+  if(!call.preCallNotes) call.preCallNotes={text:PRECALL_NOTES_TEMPLATE,updatedAt:'',locked:call.status && call.status!=='Em andamento'};
+  if(call.statusNote===undefined) call.statusNote=call.motivoPerdido||'';
+  if(call.finalObservation===undefined) call.finalObservation='';
+  return call;
+}
+function closeAllActionMenus(){document.querySelectorAll('.action-menu').forEach(m=>m.remove());}
+document.addEventListener('click',e=>{if(!e.target.closest('.action-menu-wrap')) closeAllActionMenus();});
+function scoreStatsFromCall(call){
+  const sc=call&&call.sc?call.sc:{}; let evaluated=0,total=0,max=24;
+  for(let i=0;i<12;i++){const k=`sc-12-${i}`; if(sc[k]!==undefined&&sc[k]!==null){evaluated++; total+=Number(sc[k])||0;}}
+  return {total,evaluated,max,percent:max?Math.round((total/max)*100):0};
 }
 
 
@@ -422,13 +443,11 @@ function submitEndCall() {
 }
 
 function deleteCall(id) {
-  if(confirm('Tem certeza de que deseja apagar este registro?')) {
-    const token=getAccessToken();
-    state.calls=state.calls.filter(c=>c.id!==id);
-    if(state.activeCallId===id) state.activeCallId=null;
-    localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+  if(confirm('Tem certeza de que deseja apagar permanentemente o registro desta call?')) {
+    state.calls = state.calls.filter(c => c.id !== id);
+    if(state.activeCallId === id) state.activeCallId = null;
+    saveToStorage();
     render();
-    if(token){syncStatus='saving';updateSyncBadge();fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'deleteCall',token,closer:CLOSER_NAME,id})}).then(r=>r.json()).then(data=>{if(!data||data.ok===false)throw new Error(data&&data.error?data.error:'Erro ao apagar');syncStatus='saved';updateSyncBadge();console.log('Call excluída logicamente:',data);}).catch(err=>{console.error('Erro ao apagar:',err);syncStatus='error';updateSyncBadge();});}
   }
 }
 
@@ -440,33 +459,23 @@ function selectCall(id) {
 }
 
 function renderBanner() {
-  const container = document.getElementById('call-banner-container');
-  container.innerHTML = '';
-  
-  const call = getActiveCall();
-  if(call) {
-    const banner = mk('div', 'call-banner');
-    const left = mk('div', 'call-banner-txt');
-    left.innerHTML = `<div class="call-banner-dot"></div><span>Sessão Ativa: <b>${call.leadName}</b> · SDR: ${call.sdrName}</span>`;
-    if(call.isSao) {
-      left.appendChild(mk('span', 'badge b-sao', 'SAO'));
-    }
-    
-    const right = mk('div', '');
-    right.style.cssText='display:flex;gap:8px;align-items:center;flex-wrap:wrap';
-    const btnSc = mk('button', 'btn-secondary', '<i class="ti ti-chart-bar"></i> Ir para Scorecard');
-    btnSc.addEventListener('click', () => { state.active = 12; saveToStorage(); render(); window.scrollTo(0,0); });
-    const btnEnd = mk('button', 'btn-danger', '<i class="ti ti-circle-check"></i> Concluir Execução');
-    btnEnd.addEventListener('click', openEndCallModal);
-    right.appendChild(btnSc);
-    right.appendChild(btnEnd);
-    
-    banner.appendChild(left);
-    banner.appendChild(right);
-    container.appendChild(banner);
+  const container=document.getElementById('call-banner-container');
+  container.innerHTML='';
+  const call=ensureCallModel(getActiveCall());
+  if(call){
+    const bar=mk('div','sticky-context');
+    const title=mk('div','sticky-context-title');
+    title.innerHTML=`<span class="sticky-context-dot"></span><span><b>${escapeHtml(call.leadName)}</b> · SDR: ${escapeHtml(call.sdrName||'—')}</span>${call.isSao?' <span class="badge b-sao">SAO</span>':''}`;
+    const actions=mk('div','sticky-context-actions');
+    const bPre=mk('button','btn-secondary','Pré-call'); bPre.onclick=()=>{state.active=1;saveToStorage();render();window.scrollTo(0,0);};
+    const bNotes=mk('button','btn-secondary','Notas'); bNotes.onclick=()=>{state.active=1;saveToStorage();render();setTimeout(()=>document.getElementById('precall-notes-text')?.focus(),80);};
+    const bScore=mk('button','btn-secondary','Scorecard'); bScore.onclick=()=>{state.active=12;saveToStorage();render();window.scrollTo(0,0);};
+    const bEnd=mk('button','btn-danger','Concluir execução'); bEnd.onclick=openEndCallModal;
+    actions.appendChild(bPre);actions.appendChild(bNotes);actions.appendChild(bScore);actions.appendChild(bEnd);
+    bar.appendChild(title);bar.appendChild(actions);container.appendChild(bar);
   } else {
-    const sandbox = mk('div', 'call-banner-sandbox');
-    sandbox.innerHTML = `<i class="ti ti-info-circle"></i> Navegando em Modo Sandbox (Simulação). Nenhuma call ativa. Os dados preenchidos serão salvos temporariamente. Vá até o <b>Cockpit</b> para iniciar um atendimento real.`;
+    const sandbox=mk('div','call-banner-sandbox');
+    sandbox.innerHTML=`<i class="ti ti-info-circle"></i> Navegando em Modo Sandbox. Nenhuma reunião ativa. Vá até <b>Minhas Calls</b> para iniciar ou retomar um atendimento.`;
     container.appendChild(sandbox);
   }
 }
@@ -860,39 +869,32 @@ function importData() {
 
 
 function openEditCallModal(id){
-  const call=state.calls.find(c=>c.id===id); if(!call) return;
-  let di='';
-  if(call.date){const p=call.date.split('/');if(p.length===3)di=p[2]+'-'+p[1]+'-'+p[0];}
+  const call=state.calls.find(c=>c.id===id); if(!call) return; ensureCallModel(call);
+  const di=dateInputValue(call.date);
   const opts=['Em andamento','Follow-up','Venda','Perdido','No-Show'].map(s=>'<option value="'+s+'"'+(call.status===s?' selected':'')+'>'+s+'</option>').join('');
-  showModal('Editar Registro de Call',`
+  showModal('Editar Registro de Reunião',`
     <div class="md-form">
-      <div class="md-group"><label class="md-label">Lead / Clínica</label>
-        <input type="text" id="ed-lead" class="md-input" value="${call.leadName||''}" /></div>
-      <div class="md-group"><label class="md-label">SDR</label>
-        <input type="text" id="ed-sdr" class="md-input" value="${call.sdrName||''}" /></div>
-      <div class="md-group"><label class="md-label">Data</label>
-        <input type="date" id="ed-date" class="md-input" value="${di}" /></div>
-      <div class="md-group"><label class="md-label">Status</label>
-        <select id="ed-status" class="md-input">${opts}</select></div>
-      <div class="md-group"><label class="md-row-check">
-        <input type="checkbox" id="ed-sao" ${call.isSao?'checked':''} style="accent-color:#3b82f6;" />
-        <span>Validado como SAO</span></label></div>
-      <div class="md-btns">
-        <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
-        <button class="btn-primary" onclick="submitEditCall('${id}')">Salvar</button>
-      </div>
-    </div>
-  `);
+      <div class="md-group"><label class="md-label">Lead / Clínica</label><input type="text" id="ed-lead" class="md-input" value="${escapeAttr(call.leadName||'')}" /></div>
+      <div class="md-group"><label class="md-label">SDR</label><input type="text" id="ed-sdr" class="md-input" value="${escapeAttr(call.sdrName||'')}" /></div>
+      <div class="md-group"><label class="md-label">Data</label><input type="date" id="ed-date" class="md-input" value="${di}" /></div>
+      <div class="md-group"><label class="md-label">Status</label><select id="ed-status" class="md-input">${opts}</select></div>
+      <div class="md-group"><label class="md-label">Observação / nota do status</label><textarea id="ed-note" class="md-input" rows="3" placeholder="Ex: retorno combinado, motivo da perda, contexto do follow-up...">${escapeHtml(call.statusNote||call.motivoPerdido||'')}</textarea></div>
+      <div class="md-group"><label class="md-row-check"><input type="checkbox" id="ed-sao" ${call.isSao?'checked':''} style="accent-color:#3b82f6;" /> <span>Validado como SAO</span></label></div>
+      <div class="md-btns"><button class="btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn-primary" onclick="submitEditCall('${id}')">Salvar</button></div>
+    </div>`);
 }
 
 function submitEditCall(id){
-  const call=state.calls.find(c=>c.id===id); if(!call) return;
+  const call=state.calls.find(c=>c.id===id); if(!call) return; ensureCallModel(call);
+  const oldStatus=call.status||'';
   const l=document.getElementById('ed-lead').value.trim(); if(l) call.leadName=l;
   const s=document.getElementById('ed-sdr').value.trim(); if(s) call.sdrName=s;
   call.status=document.getElementById('ed-status').value;
+  call.statusNote=document.getElementById('ed-note').value.trim();
   call.isSao=document.getElementById('ed-sao').checked;
-  const dv=document.getElementById('ed-date').value;
-  if(dv) call.date=new Date(dv+'T12:00:00').toLocaleDateString('pt-BR');
+  const dv=document.getElementById('ed-date').value; if(dv) call.date=new Date(dv+'T12:00:00').toLocaleDateString('pt-BR');
+  if(call.status==='Perdido') call.motivoPerdido=call.statusNote; else if(oldStatus==='Perdido') call.motivoPerdido='';
+  if(oldStatus!==call.status){call.statusHistory=Array.isArray(call.statusHistory)?call.statusHistory:[];call.statusHistory.push({at:new Date().toISOString(),from:oldStatus,to:call.status,note:call.statusNote||''});}
   closeModal(); saveToStorage(); render();
 }
 
@@ -955,49 +957,18 @@ function renderCompare(){
 
 function render(){
   renderBanner();
-  
   document.getElementById('btn-db').classList.toggle('active', state.active === 'dashboard');
   document.getElementById('btn-cfg').classList.toggle('active', state.active === 'settings');
-  
-  const nav=document.getElementById('nav');
-  nav.innerHTML='';
-  
-  M.forEach(m=>{
-    const isAct = (state.active === m.id);
-    const btn=mk('button','sb-btn'+(isAct?' active':''));
-    btn.style.setProperty('--ac',m.accent);
-    btn.innerHTML=`<i class="ti ${m.icon}" style="font-size:15px;color:${isAct?m.accent:'inherit'};flex-shrink:0"></i>${m.label}`;
-    btn.addEventListener('click',()=>{
-      state.active=m.id;
-      saveToStorage();
-      render();
-      window.scrollTo(0,0);
-    });
-    nav.appendChild(btn);
-  });
-  
-  document.getElementById('btn-db').onclick = () => { state.active = 'dashboard'; saveToStorage(); render(); };
-  document.getElementById('btn-cfg').onclick = () => { state.active = 'settings'; saveToStorage(); render(); };
-
-  if(state.active === 'dashboard') {
-    renderDashboard();
-    return;
-  }
-  if(state.active === 'settings') {
-    renderSettings();
-    return;
-  }
-
-  const mod=M[state.active];
-  const cnt=document.getElementById('content');
-  cnt.innerHTML='';
-  
-  const num=mk('div','mod-num',`módulo ${String(mod.id).padStart(2,'0')}`);
-  num.style.color=mod.accent;
-  cnt.appendChild(num);
-  cnt.appendChild(mk('div','mod-title',mod.title));
-  cnt.appendChild(mk('div','mod-sub',mod.sub));
+  const nav=document.getElementById('nav'); nav.innerHTML='';
+  M.forEach(m=>{const isAct=(state.active===m.id);const btn=mk('button','sb-btn'+(isAct?' active':''));btn.style.setProperty('--ac',m.accent);btn.innerHTML=`<i class="ti ${m.icon}" style="font-size:15px;color:${isAct?m.accent:'inherit'};flex-shrink:0"></i>${m.label}`;btn.addEventListener('click',()=>{state.active=m.id;saveToStorage();render();window.scrollTo(0,0);});nav.appendChild(btn);});
+  document.getElementById('btn-db').onclick=()=>{state.active='dashboard';saveToStorage();render();};
+  document.getElementById('btn-cfg').onclick=()=>{state.active='settings';saveToStorage();render();};
+  if(state.active==='dashboard'){renderDashboard();return;}
+  if(state.active==='settings'){renderSettings();return;}
+  const mod=M[state.active]; const cnt=document.getElementById('content'); cnt.innerHTML='';
+  const num=mk('div','mod-num',`módulo ${String(mod.id).padStart(2,'0')}`); num.style.color=mod.accent; cnt.appendChild(num); cnt.appendChild(mk('div','mod-title',mod.title)); cnt.appendChild(mk('div','mod-sub',mod.sub));
   mod.s.forEach(s=>{const sec=renderSection(s,mod);if(sec)cnt.appendChild(sec);});
+  appendContextualModuleActions(mod.id,cnt);
 }
 
 function setupMobileNav(){
@@ -1038,16 +1009,8 @@ function initNewCallForm() {
 function submitNewCall() {
   const lead=document.getElementById('nc-lead').value.trim(); const sdr=document.getElementById('nc-sdr').value.trim();
   if(!lead||!sdr){alert('Por favor, preencha todos os campos obrigatórios.');return;}
-  const leadId = makeLeadId(lead);
-  const now = new Date().toISOString();
-  const newCall=ensureCallModel({
-    id:'call_'+Date.now(), leadId, leadName:lead, sdrName:sdr, meetingType:'Primeira reunião', isSao:false,
-    status:'Em andamento', statusNote:'', motivoPerdido:'', finalObservation:'',
-    date:(()=>{const d=document.getElementById('nc-date');return d&&d.value?new Date(d.value+'T12:00:00').toLocaleDateString('pt-BR'):new Date().toLocaleDateString('pt-BR')})(),
-    statusHistory:[{at:now,from:'',to:'Em andamento',note:'',source:'novoLead'}],
-    preCallNotes:{text:PRECALL_NOTES_TEMPLATE,updatedAt:now,locked:false},
-    cl:{},sc:{}
-  });
+  const now=new Date().toISOString(); const leadId=makeLeadId(lead);
+  const newCall=ensureCallModel({id:'call_'+Date.now(),leadId,leadName:lead,sdrName:sdr,meetingType:'Primeira reunião',isSao:false,status:'Em andamento',statusNote:'',motivoPerdido:'',finalObservation:'',date:(()=>{const d=document.getElementById('nc-date');return d&&d.value?new Date(d.value+'T12:00:00').toLocaleDateString('pt-BR'):new Date().toLocaleDateString('pt-BR')})(),statusHistory:[{at:now,from:'',to:'Em andamento',note:'',source:'novoLead'}],preCallNotes:{text:PRECALL_NOTES_TEMPLATE,updatedAt:now,locked:false},cl:{},sc:{}});
   state.calls.push(newCall); state.activeCallId=newCall.id; state.active=1; closeModal(); saveToStorage(); render();
 }
 function openEndCallModal(){
@@ -1066,17 +1029,50 @@ function submitEndCall(){
 }
 
 function renderDashboard(){
-  const cnt=document.getElementById('content'); cnt.innerHTML=''; cnt.appendChild(mk('div','mod-title','Cockpit de Vendas Consultivas')); cnt.appendChild(mk('div','mod-sub','Histórico local, conversões de Demo realizada > SAO, SAO > Venda, Demo > Venda e auditoria estrutural de processos.'));
-  const topActions=mk('div','dash-actions'); const topLeft=mk('div','dash-actions-left'); const btnNewTop=mk('button','btn-primary','<i class="ti ti-plus"></i> Novo Lead'); btnNewTop.addEventListener('click',initNewCallForm); topLeft.appendChild(btnNewTop); const searchBox=mk('div','search-wrap'); searchBox.innerHTML='<i class="ti ti-search"></i><input type="search" id="call-search" class="search-input" placeholder="Pesquisar pelo nome da clínica/lead..." value="'+escapeHtml(sessionStorage.getItem('call-search')||'')+'" />'; topLeft.appendChild(searchBox); topActions.appendChild(topLeft); cnt.appendChild(topActions); cnt.appendChild(mk('div','loading-feedback','<span class="loading-dot"></span><span>Buscando reuniões...</span>'));
-  setTimeout(()=>{const s=document.getElementById('call-search'); if(s){let t=null; s.addEventListener('input',()=>{document.querySelector('.loading-feedback')?.classList.add('show'); clearTimeout(t); t=setTimeout(()=>{sessionStorage.setItem('call-search',s.value.trim());sessionStorage.setItem('calls-page','1');render();},250);});}},0);
-  const filRow=mk('div','fil-row'); const fg1=mk('div','fil-grp'); fg1.innerHTML='<label class="fil-lbl">Data inicial</label>'; const fi1=document.createElement('input'); fi1.type='date'; fi1.id='fil-start'; fi1.className='fil-inp'; fi1.value=sessionStorage.getItem('fil-start')||''; fg1.appendChild(fi1); const fg2=mk('div','fil-grp'); fg2.innerHTML='<label class="fil-lbl">Data final</label>'; const fi2=document.createElement('input'); fi2.type='date'; fi2.id='fil-end'; fi2.className='fil-inp'; fi2.value=sessionStorage.getItem('fil-end')||''; fg2.appendChild(fi2); const bFil=mk('button','btn-primary','Filtrar'); bFil.style.cssText='align-self:flex-end;font-size:12px;padding:7px 14px'; bFil.addEventListener('click',()=>{sessionStorage.setItem('fil-start',document.getElementById('fil-start')?.value||'');sessionStorage.setItem('fil-end',document.getElementById('fil-end')?.value||'');sessionStorage.setItem('calls-page','1');state.active='dashboard';render();}); const bCmp=mk('button','btn-secondary',''); bCmp.innerHTML='<i class="ti ti-arrows-left-right" style="font-size:13px;margin-right:5px"></i>Comparar'; bCmp.style.cssText='align-self:flex-end;font-size:12px;padding:7px 12px;display:flex;align-items:center'; bCmp.addEventListener('click',openCompareModal); filRow.appendChild(fg1);filRow.appendChild(fg2);filRow.appendChild(bFil);filRow.appendChild(bCmp); cnt.appendChild(filRow);
-  const _fs=sessionStorage.getItem('fil-start')||'', _fe=sessionStorage.getItem('fil-end')||''; let filteredCalls=state.calls; if(_fs||_fe){filteredCalls=state.calls.filter(c=>{if(!c.date)return true; const p=c.date.split('/'); if(p.length!==3)return true; const dt=new Date(`${p[2]}-${p[1]}-${p[0]}`).getTime(); return dt>=(_fs?new Date(_fs).getTime():0)&&dt<=(_fe?new Date(_fe+'T23:59:59').getTime():Infinity);});} const searchTerm=(sessionStorage.getItem('call-search')||'').toLowerCase(); if(searchTerm){filteredCalls=filteredCalls.filter(c=>(c.leadName||'').toLowerCase().includes(searchTerm));}
-  const convStats=getConversionStats(filteredCalls); let scoreSum=0,evaluatedCalls=0; filteredCalls.forEach(c=>{let scKeys=Object.keys(c.sc||{}); if(scKeys.length>0){let sum=0,count=0; scKeys.forEach(k=>{if(c.sc[k]!==undefined&&c.sc[k]!==null){sum+=c.sc[k];count++;}}); if(count>0){scoreSum+=(sum/(count*2))*100;evaluatedCalls++;}}}); const avgScore=evaluatedCalls>0?Math.round(scoreSum/evaluatedCalls):0; const grid=mk('div','db-grid'); grid.appendChild(createMetricCard('Total de Reuniões',filteredCalls.length)); grid.appendChild(createMetricCard('Demos Realizadas',convStats.demos)); grid.appendChild(createMetricCard('Demo > SAO',convStats.demoSao+'%')); grid.appendChild(createMetricCard('SAO > Venda',convStats.saoVenda+'%')); grid.appendChild(createMetricCard('Demo > Venda',convStats.demoVenda+'%')); grid.appendChild(createMetricCard('Aderência Média Playbook',avgScore>0?avgScore+'%':'--')); cnt.appendChild(grid);
-  if(filteredCalls.length>0){const chartsRow=mk('div','db-charts'); [['chartStatus','Distribuição dos Fechamentos (Status)'],['chartSdr','Volume Comercial por SDR'],['chartConversions','Conversões do Funil']].forEach(pair=>{const cont=mk('div','chart-container'); cont.appendChild(mk('div','chart-title',pair[1])); const cw=mk('div',''); cw.style='position:relative;height:180px'; const cv=document.createElement('canvas'); cv.id=pair[0]; cw.appendChild(cv); cont.appendChild(cw); chartsRow.appendChild(cont);}); cnt.appendChild(chartsRow); const evoContainer=mk('div','chart-container'); evoContainer.style.marginBottom='28px'; evoContainer.appendChild(mk('div','chart-title','Evolução Mensal — Aderência ao Playbook x Conversão')); const cw3=mk('div',''); cw3.style='position:relative;height:220px'; const canvas3=document.createElement('canvas'); canvas3.id='chartEvolution'; cw3.appendChild(canvas3); evoContainer.appendChild(cw3); evoContainer.appendChild(mk('div','evo-note','Aderência = média dos scorecards preenchidos no mês. Conversão = Vendas / SAOs no mês. Demos realizadas excluem No-Show e reuniões em andamento.')); cnt.appendChild(evoContainer);}
-  cnt.appendChild(mk('div','','<h3 style="font-size:16px; font-weight:600; margin-bottom:12px;">Histórico de Reuniões</h3>'));
-  if(state.calls.length===0){cnt.appendChild(mk('div','','<p style="font-size:13px; color:#64748b; padding:20px; text-align:center; background:#1a2332; border:1px solid #334155; border-radius:8px;">Nenhuma reunião registrada localmente. Inicie uma nova call no topo da página.</p>'));}
-  else if(filteredCalls.length===0){cnt.appendChild(mk('div','','<p style="font-size:13px; color:#64748b; padding:20px; text-align:center; background:#1a2332; border:1px solid #334155; border-radius:8px;">Nenhuma reunião encontrada com os filtros atuais.</p>'));}
-  else{const pageSize=20,totalPages=Math.max(1,Math.ceil(filteredCalls.length/pageSize)); let currentPage=parseInt(sessionStorage.getItem('calls-page')||'1',10); if(currentPage<1)currentPage=1; if(currentPage>totalPages)currentPage=totalPages; const callsToDisplay=[...filteredCalls].reverse().slice((currentPage-1)*pageSize,currentPage*pageSize); const tblWrap=mk('div','tbl-wrap'); const tbl=document.createElement('table'); tbl.innerHTML='<thead><tr><th>Lead / Clínica</th><th>SDR</th><th>SAO</th><th>Data</th><th>Status</th><th style="text-align:right;">Ações</th></tr></thead><tbody></tbody>'; const tbody=tbl.querySelector('tbody'); callsToDisplay.forEach(c=>{const tr=document.createElement('tr'); let statusClass='b-progress'; if(c.status==='Venda')statusClass='b-venda'; if(c.status==='Follow-up')statusClass='b-follow'; if(c.status==='Perdido')statusClass='b-perdido'; if(c.status==='No-Show')statusClass='b-noshow'; const statusLabel=c.status==='Perdido'&&c.motivoPerdido?`${c.status} (${c.motivoPerdido})`:c.status; tr.innerHTML=`<td><b>${escapeHtml(c.leadName)}</b></td><td>${escapeHtml(c.sdrName)}</td><td>${c.isSao?'<span class="badge b-sao">SAO</span>':'<span style="color:#475569">—</span>'}</td><td>${escapeHtml(c.date)}</td><td><span class="badge ${statusClass}">${escapeHtml(statusLabel)}</span></td><td style="text-align:right;"></td>`; const actTd=tr.querySelector('td:last-child'); if(c.status==='Em andamento'){const btnSel=mk('button','table-action-btn','Retomar'); btnSel.addEventListener('click',()=>selectCall(c.id)); actTd.appendChild(btnSel);} else{const btnReview=mk('button','table-action-btn','Ver Checklist'); btnReview.addEventListener('click',()=>{state.activeCallId=c.id;state.active=1;saveToStorage();render();}); actTd.appendChild(btnReview);} const btnEd=mk('button','table-action-btn','Editar'); btnEd.addEventListener('click',()=>openEditCallModal(c.id)); actTd.appendChild(btnEd); const btnDel=mk('button','table-delete-btn','Apagar'); btnDel.addEventListener('click',()=>deleteCall(c.id)); actTd.appendChild(btnDel); tbody.appendChild(tr);}); tblWrap.appendChild(tbl); cnt.appendChild(tblWrap); const pg=mk('div','pg-row'); const startItem=filteredCalls.length?((currentPage-1)*pageSize+1):0,endItem=Math.min(currentPage*pageSize,filteredCalls.length); pg.appendChild(mk('div','',`Mostrando ${startItem}-${endItem} de ${filteredCalls.length} reuniões`)); const btns=mk('div','pg-btns'); const prev=mk('button','pg-btn','Anterior'); prev.disabled=currentPage===1; prev.addEventListener('click',()=>{sessionStorage.setItem('calls-page',String(currentPage-1));render();}); btns.appendChild(prev); for(let i=1;i<=totalPages;i++){if(i===1||i===totalPages||Math.abs(i-currentPage)<=2){const b=mk('button','pg-btn'+(i===currentPage?' active':''),String(i)); b.addEventListener('click',()=>{sessionStorage.setItem('calls-page',String(i));render();}); btns.appendChild(b);}} const next=mk('button','pg-btn','Próxima'); next.disabled=currentPage===totalPages; next.addEventListener('click',()=>{sessionStorage.setItem('calls-page',String(currentPage+1));render();}); btns.appendChild(next); pg.appendChild(btns); cnt.appendChild(pg); setTimeout(()=>buildCharts(filteredCalls),50);}
+  const cnt=document.getElementById('content'); cnt.innerHTML='';
+  cnt.appendChild(mk('div','mod-title','Cockpit de Vendas Consultivas'));
+  cnt.appendChild(mk('div','mod-sub','Histórico, busca, conversões e auditoria de aderência ao playbook.'));
+  let calls=(Array.isArray(state.calls)?state.calls:[]).map(ensureCallModel);
+  const _fs=sessionStorage.getItem('fil-start')||'', _fe=sessionStorage.getItem('fil-end')||'';
+  let filteredCalls=calls;
+  if(_fs||_fe){filteredCalls=filteredCalls.filter(c=>{const dv=dateInputValue(c.date); if(!dv)return true; const t=new Date(dv+'T12:00:00').getTime(); return t>=(_fs?new Date(_fs+'T00:00:00').getTime():0)&&t<=(_fe?new Date(_fe+'T23:59:59').getTime():Infinity);});}
+  const searchTerm=(sessionStorage.getItem('call-search')||'').toLowerCase();
+  if(searchTerm){filteredCalls=filteredCalls.filter(c=>(c.leadName||'').toLowerCase().includes(searchTerm)||(c.sdrName||'').toLowerCase().includes(searchTerm)||(c.status||'').toLowerCase().includes(searchTerm));}
+  const convStats=getConversionStats(filteredCalls); let scoreSum=0,evaluatedCalls=0;
+  filteredCalls.forEach(c=>{const st=scoreStatsFromCall(c); if(st.evaluated>0){scoreSum+=st.percent;evaluatedCalls++;}});
+  const avgScore=evaluatedCalls?Math.round(scoreSum/evaluatedCalls):0;
+  const grid=mk('div','db-grid');
+  grid.appendChild(createMetricCard('Total de Reuniões',filteredCalls.length));
+  grid.appendChild(createMetricCard('Demos Realizadas',convStats.demos));
+  grid.appendChild(createMetricCard('Demo > SAO',convStats.demoSao+'%'));
+  grid.appendChild(createMetricCard('SAO > Venda',convStats.saoVenda+'%'));
+  grid.appendChild(createMetricCard('Demo > Venda',convStats.demoVenda+'%'));
+  grid.appendChild(createMetricCard('Aderência Média Playbook',avgScore?avgScore+'%':'--'));
+  cnt.appendChild(grid);
+  if(filteredCalls.length>0){
+    const chartsRow=mk('div','db-charts'); [['chartStatus','Distribuição dos Fechamentos (Status)'],['chartSdr','Volume Comercial por SDR'],['chartConversions','Conversões do Funil']].forEach(pair=>{const cont=mk('div','chart-container');cont.appendChild(mk('div','chart-title',pair[1]));const cw=mk('div','');cw.style='position:relative;height:180px';const cv=document.createElement('canvas');cv.id=pair[0];cw.appendChild(cv);cont.appendChild(cw);chartsRow.appendChild(cont);}); cnt.appendChild(chartsRow);
+    const evo=mk('div','chart-container');evo.style.marginBottom='28px';evo.appendChild(mk('div','chart-title','Evolução Mensal — Aderência ao Playbook x Conversão'));const cw3=mk('div','');cw3.style='position:relative;height:220px';const cv3=document.createElement('canvas');cv3.id='chartEvolution';cw3.appendChild(cv3);evo.appendChild(cw3);evo.appendChild(mk('div','evo-note','Aderência = média dos scorecards preenchidos. Demos realizadas excluem No-Show e reuniões em andamento.'));cnt.appendChild(evo);
+  }
+  const panel=mk('div','history-panel');
+  panel.appendChild(mk('div','mod-title','Histórico de Reuniões'));
+  const toolbar=mk('div','history-toolbar'); const left=mk('div','history-toolbar-left');
+  const search=mk('div','search-wrap'); search.innerHTML=`<i class="ti ti-search"></i><input type="search" id="call-search" class="search-input" placeholder="Pesquisar lead, clínica, SDR ou status..." value="${escapeHtml(sessionStorage.getItem('call-search')||'')}" />`; left.appendChild(search);
+  const fg1=mk('div','fil-grp'); fg1.innerHTML='<label class="fil-lbl">Data inicial</label>'; const fi1=document.createElement('input');fi1.type='date';fi1.id='fil-start';fi1.className='fil-inp';fi1.value=_fs;fg1.appendChild(fi1); left.appendChild(fg1);
+  const fg2=mk('div','fil-grp'); fg2.innerHTML='<label class="fil-lbl">Data final</label>'; const fi2=document.createElement('input');fi2.type='date';fi2.id='fil-end';fi2.className='fil-inp';fi2.value=_fe;fg2.appendChild(fi2); left.appendChild(fg2);
+  const bFil=mk('button','btn-secondary','Filtrar'); bFil.onclick=()=>{sessionStorage.setItem('fil-start',document.getElementById('fil-start')?.value||'');sessionStorage.setItem('fil-end',document.getElementById('fil-end')?.value||'');sessionStorage.setItem('calls-page','1');render();}; left.appendChild(bFil);
+  const right=mk('div',''); const btnNew=mk('button','btn-primary','<i class="ti ti-plus"></i> Novo Lead'); btnNew.onclick=initNewCallForm; right.appendChild(btnNew);
+  toolbar.appendChild(left); toolbar.appendChild(right); panel.appendChild(toolbar); cnt.appendChild(panel);
+  setTimeout(()=>{const s=document.getElementById('call-search');if(s){let t=null;s.addEventListener('input',()=>{clearTimeout(t);t=setTimeout(()=>{sessionStorage.setItem('call-search',s.value.trim());sessionStorage.setItem('calls-page','1');render();},220);});}},0);
+  if(calls.length===0){cnt.appendChild(mk('div','empty-search-box','Nenhum lead ou reunião registrado ainda.<br>'));cnt.querySelector('.empty-search-box')?.appendChild(btnNew.cloneNode(true));}
+  else if(filteredCalls.length===0){const empty=mk('div','empty-search-box','Nenhum lead ou reunião encontrado para esta busca.<br>');const b=mk('button','btn-primary','Novo Lead');b.onclick=initNewCallForm;empty.appendChild(b);cnt.appendChild(empty);}
+  else{
+    const pageSize=20,totalPages=Math.max(1,Math.ceil(filteredCalls.length/pageSize)); let currentPage=parseInt(sessionStorage.getItem('calls-page')||'1',10); if(currentPage<1)currentPage=1; if(currentPage>totalPages)currentPage=totalPages;
+    const callsToDisplay=[...filteredCalls].reverse().slice((currentPage-1)*pageSize,currentPage*pageSize);
+    const tblWrap=mk('div','tbl-wrap history-table-wrap'); const tbl=document.createElement('table'); tbl.innerHTML='<thead><tr><th>Lead / Clínica</th><th>SDR</th><th>SAO</th><th>Data</th><th>Status</th><th style="text-align:right;">Ações</th></tr></thead><tbody></tbody>';
+    const tbody=tbl.querySelector('tbody'); callsToDisplay.forEach(c=>{const tr=document.createElement('tr'); let statusClass='b-progress'; if(c.status==='Venda'||c.status==='Fechado')statusClass='b-venda'; if(c.status==='Follow-up')statusClass='b-follow'; if(c.status==='Perdido')statusClass='b-perdido'; if(c.status==='No-Show')statusClass='b-noshow'; const label=c.status==='Perdido'&&(c.statusNote||c.motivoPerdido)?`${c.status} (${c.statusNote||c.motivoPerdido})`:c.status; tr.innerHTML=`<td data-label="Lead"><b>${escapeHtml(c.leadName)}</b><div style="font-size:11px;color:#64748b;margin-top:3px">${escapeHtml(c.meetingType||'Reunião')}</div></td><td data-label="SDR">${escapeHtml(c.sdrName)}</td><td data-label="SAO">${c.isSao?'<span class="badge b-sao">SAO</span>':'<span style="color:#475569">—</span>'}</td><td data-label="Data" class="date-short">${escapeHtml(formatDateShort(c.date))}</td><td data-label="Status"><span class="badge ${statusClass}">${escapeHtml(label||'—')}</span></td><td data-label="Ações" class="actions-cell" style="text-align:right;"></td>`; tr.querySelector('td:last-child').appendChild(createActionMenu(c)); tbody.appendChild(tr);});
+    tblWrap.appendChild(tbl); cnt.appendChild(tblWrap);
+    const pg=mk('div','pg-row'); const startItem=(currentPage-1)*pageSize+1,endItem=Math.min(currentPage*pageSize,filteredCalls.length); pg.appendChild(mk('div','',`Mostrando ${startItem}-${endItem} de ${filteredCalls.length} reuniões`)); const btns=mk('div','pg-btns'); const prev=mk('button','pg-btn','Anterior');prev.disabled=currentPage===1;prev.onclick=()=>{sessionStorage.setItem('calls-page',String(currentPage-1));render();};btns.appendChild(prev); for(let i=1;i<=totalPages;i++){if(i===1||i===totalPages||Math.abs(i-currentPage)<=2){const b=mk('button','pg-btn'+(i===currentPage?' active':''),String(i));b.onclick=()=>{sessionStorage.setItem('calls-page',String(i));render();};btns.appendChild(b);}} const next=mk('button','pg-btn','Próxima');next.disabled=currentPage===totalPages;next.onclick=()=>{sessionStorage.setItem('calls-page',String(currentPage+1));render();};btns.appendChild(next); pg.appendChild(btns); cnt.appendChild(pg); setTimeout(()=>buildCharts(filteredCalls),50);
+  }
 }
 function buildCharts(calls){
   if(window.charts.status)window.charts.status.destroy(); if(window.charts.sdr)window.charts.sdr.destroy(); if(window.charts.evolution)window.charts.evolution.destroy(); if(window.charts.conversions)window.charts.conversions.destroy(); const ctxStatus=document.getElementById('chartStatus'),ctxSdr=document.getElementById('chartSdr'); if(!ctxStatus||!ctxSdr)return; const statusCounts={'Venda':0,'Follow-up':0,'Perdido':0,'No-Show':0,'Em andamento':0}; calls.forEach(c=>{if(statusCounts[c.status]!==undefined)statusCounts[c.status]++;}); window.charts.status=new Chart(ctxStatus,{type:'doughnut',data:{labels:Object.keys(statusCounts),datasets:[{data:Object.values(statusCounts),backgroundColor:['#10b981','#f59e0b','#ef4444','#64748b','#3b82f6'],borderWidth:0}]},options:{responsive:true,plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{size:11}}}}}}); const sdrData={}; calls.forEach(c=>{if(!sdrData[c.sdrName])sdrData[c.sdrName]={saos:0,vendas:0}; if(c.isSao)sdrData[c.sdrName].saos++; if(c.status==='Venda')sdrData[c.sdrName].vendas++;}); window.charts.sdr=new Chart(ctxSdr,{type:'bar',data:{labels:Object.keys(sdrData),datasets:[{label:'Oportunidades SAO',data:Object.values(sdrData).map(d=>d.saos),backgroundColor:'#06b6d4'},{label:'Vendas Fechadas',data:Object.values(sdrData).map(d=>d.vendas),backgroundColor:'#10b981'}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:'#94a3b8'},grid:{display:false}},y:{ticks:{color:'#94a3b8',stepSize:1},grid:{color:'#1e293b'}}},plugins:{legend:{labels:{color:'#94a3b8'}}}}}); const ctxConversions=document.getElementById('chartConversions'); if(ctxConversions){const cs=getConversionStats(calls); window.charts.conversions=new Chart(ctxConversions,{type:'bar',data:{labels:['Demo > SAO','SAO > Venda','Demo > Venda'],datasets:[{label:'Conversão (%)',data:[cs.demoSao,cs.saoVenda,cs.demoVenda],backgroundColor:['#06b6d4','#10b981','#8b5cf6']}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:'#94a3b8'},grid:{display:false}},y:{min:0,max:100,ticks:{color:'#94a3b8'},grid:{color:'#1e293b'}}},plugins:{legend:{display:false}}}});} const ctxEvo=document.getElementById('chartEvolution'); if(ctxEvo){const evo=buildEvolutionData(calls); window.charts.evolution=new Chart(ctxEvo,{type:'line',data:{labels:evo.labels,datasets:[{label:'Aderência ao playbook (%)',data:evo.adherence,borderColor:'#8b5cf6',backgroundColor:'rgba(139,92,246,0.15)',tension:0.25,spanGaps:true},{label:'Conversão (Venda/SAO) (%)',data:evo.conversion,borderColor:'#10b981',backgroundColor:'rgba(16,185,129,0.15)',tension:0.25,spanGaps:true}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:'#94a3b8'},grid:{display:false}},y:{min:0,max:100,ticks:{color:'#94a3b8'},grid:{color:'#1e293b'}}},plugins:{legend:{labels:{color:'#94a3b8'}}}}});}
@@ -1094,19 +1090,17 @@ function resetAccessToken(){localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);al
 function loadFromStorage(){const saved=localStorage.getItem(STORAGE_KEY);if(saved){try{const parsed=JSON.parse(saved);if(parsed)state={...state,...parsed};}catch(e){console.error('Erro ao carregar cache local',e);}}}
 function saveToStorage(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state));scheduleRemoteSync();}
 function scheduleRemoteSync(){
-  syncStatus = 'saving';
-  updateSyncBadge();
-  clearTimeout(syncTimer);
-  const delay = apiReachable ? 15000 : 1200;
-  syncTimer = setTimeout(syncToRemote, delay);
+  syncStatus='saving'; updateSyncBadge(); clearTimeout(syncTimer);
+  const delay=apiReachable?15000:1200;
+  syncTimer=setTimeout(syncToRemote,delay);
 }
 function syncToRemote(){
-  const token = getAccessToken();
-  if(!token){ syncStatus='error'; updateSyncBadge(); return; }
-  const calls = (Array.isArray(state.calls)?state.calls:[]).map(ensureCallModel);
-  fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'saveCalls',token,closer:CLOSER_NAME,calls})})
-    .then(r=>r.json()).then(data=>{if(!data||data.ok===false)throw new Error(data&&data.error?data.error:'Erro ao sincronizar');apiReachable=true;syncStatus='saved';updateSyncBadge();console.log('Sync V09 concluído:',data);})
-    .catch(err=>{console.error('Erro de sync V09:',err);syncStatus='error';updateSyncBadge();if(String(err.message).includes('unauthorized'))resetAccessToken();});
+  const token=getAccessToken();
+  if(!token){syncStatus='error';updateSyncBadge();return;}
+  const calls=(Array.isArray(state.calls)?state.calls:[]).map(ensureCallModel);
+  fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'saveCalls',token:token,closer:CLOSER_NAME,calls:calls})})
+    .then(r=>r.json()).then(data=>{if(!data||data.ok===false)throw new Error(data&&data.error?data.error:'Erro ao sincronizar');apiReachable=true;syncStatus='saved';updateSyncBadge();console.log('Sync V10 concluído:',data);})
+    .catch(err=>{console.error('Erro de sync V10:',err);syncStatus='error';updateSyncBadge();if(String(err.message).includes('unauthorized'))resetAccessToken();});
 }
 function fetchCallsRemote(token){
   const url=API_URL+'?action=getCalls&token='+encodeURIComponent(token)+'&closer='+encodeURIComponent(CLOSER_NAME);
@@ -1119,14 +1113,14 @@ function applyRemoteCallsToState(calls){
 function validateTokenAndLoad(token){
   if(!token){showAccessError('Digite a chave de acesso para continuar.');return;}
   clearAccessError();setAccessLoading(true);
-  return fetchCallsRemote(token).then(data=>{if(!data||data.ok===false)throw new Error(data&&data.error?data.error:'unauthorized');localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY,token);apiReachable=true;applyRemoteCallsToState(data.calls||[]);syncStatus='saved';console.log('Dados carregados V09:',(data.calls||[]).length,'calls');unlockApplication();})
-    .catch(err=>{console.error('Falha de autenticação/carregamento V09:',err);localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);showAccessError('Chave inválida ou backend indisponível. Confira a chave e tente novamente.');})
+  return fetchCallsRemote(token).then(data=>{if(!data||data.ok===false)throw new Error(data&&data.error?data.error:'unauthorized');localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY,token);apiReachable=true;applyRemoteCallsToState(data.calls||[]);syncStatus='saved';console.log('Dados carregados V10:',(data.calls||[]).length,'calls');unlockApplication();})
+    .catch(err=>{console.error('Falha de autenticação/carregamento V10:',err);localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);showAccessError('Chave inválida ou backend indisponível. Confira a chave e tente novamente.');})
     .finally(()=>setAccessLoading(false));
 }
 function loadFromRemote(){
   const token=getAccessToken(); if(!token)return Promise.resolve();
-  return fetchCallsRemote(token).then(data=>{apiReachable=true;if(!data||data.ok===false)throw new Error(data&&data.error?data.error:'Erro ao carregar');applyRemoteCallsToState(data.calls||[]);console.log('Recarregado da nuvem V09:',(data.calls||[]).length,'calls');})
-    .catch(err=>{console.error('Não foi possível conectar ao backend V09.',err);if(String(err.message).includes('unauthorized'))resetAccessToken();});
+  return fetchCallsRemote(token).then(data=>{apiReachable=true;if(!data||data.ok===false)throw new Error(data&&data.error?data.error:'Erro ao carregar');applyRemoteCallsToState(data.calls||[]);console.log('Recarregado da nuvem V10:',(data.calls||[]).length,'calls');})
+    .catch(err=>{console.error('Não foi possível conectar ao backend V10.',err);if(String(err.message).includes('unauthorized'))resetAccessToken();});
 }
 function initAccessGate(){loadFromStorage();const input=document.getElementById('access-token-input');const btn=document.getElementById('access-submit-btn');const saved=getAccessToken();if(btn)btn.addEventListener('click',()=>validateTokenAndLoad((input&&input.value?input.value:'').trim()));if(input){input.addEventListener('keydown',e=>{if(e.key==='Enter')validateTokenAndLoad(input.value.trim());});setTimeout(()=>input.focus(),100);}if(saved){if(input)input.value=saved;validateTokenAndLoad(saved);}}
 function clearLocalCache(){const ok=confirm('Remover apenas os dados salvos neste navegador? Os dados da nuvem/Google Sheets NÃO serão apagados.');if(!ok)return;localStorage.removeItem(STORAGE_KEY);alert('Cache local removido. A página será recarregada para buscar novamente os dados da nuvem.');window.location.reload();}
@@ -1165,3 +1159,47 @@ function renderSettings(){const cnt=document.getElementById('content');cnt.inner
 /* ===== FIM PATCH FINAL V14-MERGE ===== */
 
 initAccessGate();
+
+
+function appendContextualModuleActions(moduleId,cnt){
+  if(moduleId===1){renderPreCallNotes(cnt);const row=mk('div','context-end-actions');const btn=mk('button','btn-primary','Continuar para Scorecard');btn.onclick=()=>{state.active=12;saveToStorage();render();window.scrollTo(0,0);};row.appendChild(btn);cnt.appendChild(row);}
+  if(moduleId===12&&getActiveCall()){const row=mk('div','context-end-actions');const btn=mk('button','btn-primary','Concluir execução');btn.onclick=openEndCallModal;row.appendChild(btn);cnt.appendChild(row);}
+}
+function renderPreCallNotes(cnt){
+  const call=ensureCallModel(getActiveCall()); if(!call) return;
+  const box=mk('div','precall-notes-box'); box.appendChild(mk('div','sec-h','Notas de preparação da call')); box.appendChild(mk('div','sec-sub','Use a sugestão abaixo como apoio. Você pode apagar, editar ou sobrescrever livremente.'));
+  const locked=call.status&&call.status!=='Em andamento';
+  if(locked){box.appendChild(mk('div','readonly-note',escapeHtml((call.preCallNotes&&call.preCallNotes.text)||''))); box.appendChild(mk('div','sec-sub','Reunião concluída: notas em modo somente leitura.'));}
+  else{const ta=document.createElement('textarea');ta.id='precall-notes-text';ta.className='md-input';ta.value=(call.preCallNotes&&call.preCallNotes.text)||PRECALL_NOTES_TEMPLATE;ta.addEventListener('input',()=>{call.preCallNotes={text:ta.value,updatedAt:new Date().toISOString(),locked:false};saveToStorage();});box.appendChild(ta);}
+  cnt.appendChild(box);
+}
+function createActionMenu(call){
+  const wrap=mk('div','action-menu-wrap'); const btn=mk('button','action-menu-btn','⋮');
+  btn.onclick=(e)=>{e.stopPropagation();closeAllActionMenus();const menu=mk('div','action-menu');
+    const items=[['Ver detalhes',()=>openDetailsModal(call.id)],['Ver checklist',()=>{state.activeCallId=call.id;state.active=1;saveToStorage();render();window.scrollTo(0,0);}],['Editar',()=>openEditCallModal(call.id)],['Atualizar status',()=>openStatusModal(call.id)],['Adicionar reunião',()=>addMeetingFromCall(call.id)],['Apagar',()=>deleteCall(call.id)]];
+    items.forEach(([label,fn])=>{const b=mk('button','',label);b.onclick=(ev)=>{ev.stopPropagation();closeAllActionMenus();fn();};menu.appendChild(b);});wrap.appendChild(menu);};
+  wrap.appendChild(btn); return wrap;
+}
+function openDetailsModal(id){
+  const c=ensureCallModel(state.calls.find(x=>x.id===id)); if(!c)return;
+  const st=scoreStatsFromCall(c);
+  const hist=(Array.isArray(c.statusHistory)?c.statusHistory:[]).map(h=>`<div class="status-history-item"><b>${formatDateShort(h.at)}</b> — ${escapeHtml(h.from? h.from+' → '+h.to : h.to||'')}<br>${escapeHtml(h.note||'')}</div>`).join('')||'<div class="sec-sub">Sem histórico registrado.</div>';
+  showModal('Detalhes da reunião',`<div class="md-form"><div class="detail-grid"><div class="detail-item"><div class="detail-label">Lead</div><div class="detail-value">${escapeHtml(c.leadName)}</div></div><div class="detail-item"><div class="detail-label">SDR</div><div class="detail-value">${escapeHtml(c.sdrName||'—')}</div></div><div class="detail-item"><div class="detail-label">Data</div><div class="detail-value">${escapeHtml(formatDateShort(c.date))}</div></div><div class="detail-item"><div class="detail-label">Status atual</div><div class="detail-value">${escapeHtml(c.status||'—')}</div></div></div><div class="md-group"><label class="md-label">Observação / nota do status</label><div class="readonly-note">${escapeHtml(c.statusNote||c.motivoPerdido||'—')}</div></div><div class="md-group"><label class="md-label">Notas de Pré-call</label><div class="readonly-note">${escapeHtml((c.preCallNotes&&c.preCallNotes.text)||'—')}</div></div><div class="md-group"><label class="md-label">Scorecard</label><div class="readonly-note">${st.total}/${st.max} pontos · ${st.percent}% · ${st.evaluated}/12 critérios avaliados</div></div><div class="md-group"><label class="md-label">Histórico de status</label><div class="status-history-list">${hist}</div></div><div class="md-btns"><button class="btn-secondary" onclick="closeModal()">Fechar</button></div></div>`);
+  const box=document.querySelector('#modal-container .md-box');if(box)box.style.maxWidth='760px';
+}
+function openStatusModal(id){
+  const c=ensureCallModel(state.calls.find(x=>x.id===id)); if(!c)return;
+  const opts=['Em andamento','Follow-up','Venda','Perdido','No-Show'].map(s=>`<option value="${s}" ${c.status===s?'selected':''}>${s}</option>`).join('');
+  showModal('Atualizar status',`<div class="md-form"><div class="md-group"><label class="md-label">Novo status</label><select id="st-status" class="md-input">${opts}</select></div><div class="md-group"><label class="md-label">Nota desta atualização</label><textarea id="st-note" class="md-input" rows="4" placeholder="Ex: cliente pediu retorno, objeção, motivo da perda...">${escapeHtml(c.statusNote||c.motivoPerdido||'')}</textarea></div><div class="md-btns"><button class="btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn-primary" onclick="submitStatusUpdate('${id}')">Salvar status</button></div></div>`);
+}
+function submitStatusUpdate(id){
+  const c=ensureCallModel(state.calls.find(x=>x.id===id)); if(!c)return; const old=c.status||''; const ns=document.getElementById('st-status').value; const note=document.getElementById('st-note').value.trim(); c.status=ns;c.statusNote=note;if(ns==='Perdido')c.motivoPerdido=note;c.statusHistory=Array.isArray(c.statusHistory)?c.statusHistory:[];c.statusHistory.push({at:new Date().toISOString(),from:old,to:ns,note});closeModal();saveToStorage();render();
+}
+function addMeetingFromCall(id){
+  const base=ensureCallModel(state.calls.find(x=>x.id===id)); if(!base)return;
+  if(syncStatus!=='saved') syncToRemote();
+  const now=new Date().toISOString(); const newCall=ensureCallModel({id:'call_'+Date.now(),leadId:base.leadId,leadName:base.leadName,sdrName:base.sdrName,date:new Date().toLocaleDateString('pt-BR'),meetingType:'Reunião de sequência',isSao:false,status:'Em andamento',statusNote:'',motivoPerdido:'',finalObservation:'',statusHistory:[{at:now,from:'',to:'Em andamento',note:'',source:'adicionarReuniao'}],preCallNotes:{text:PRECALL_NOTES_TEMPLATE,updatedAt:now,locked:false},cl:{},sc:{}});
+  state.calls.push(newCall);state.activeCallId=newCall.id;state.active=1;saveToStorage();render();window.scrollTo(0,0);
+}
+
+
