@@ -1,60 +1,94 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Playbook de Vendas</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2310b981'/%3E%3Ctext x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' font-size='44' font-family='Arial,sans-serif' font-weight='700' fill='white'%3E%24%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.0.0/tabler-icons.min.css">
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<link rel="stylesheet" href="./styles/main.css">
-</head>
-<body class="app-locked">
-
-<div id="access-screen" class="access-screen">
-  <div class="access-card">
-    <div class="access-logo">$</div>
-    <div class="access-kicker">Acesso protegido</div>
-    <h1>Playbook de Vendas</h1>
-    <p>Informe a chave de acesso para carregar o cockpit, histórico de reuniões, scorecards e métricas comerciais.</p>
-    <div class="access-field">
-      <label for="access-token-input">Chave de acesso</label>
-      <input id="access-token-input" type="password" autocomplete="current-password" placeholder="Digite sua chave" />
-    </div>
-    <button id="access-submit-btn" class="access-btn" type="button"><i class="ti ti-lock-open"></i> Entrar no Playbook</button>
-    <div id="access-error" class="access-error hidden"></div>
-    <div class="access-note">A chave é salva apenas neste navegador. Você pode removê-la depois em <b>Configurações &gt; Remover chave salva neste navegador</b>.</div>
-  </div>
-</div>
-
-<button id="sb-toggle" class="sb-toggle" aria-label="Abrir menu" aria-expanded="false"><span class="sb-toggle-lines" aria-hidden="true"><span></span><span></span><span></span></span></button>
-<div id="sb-backdrop" class="sb-backdrop"></div>
-<nav class="sb" id="sb-nav" aria-label="Módulos">
-  <div class="sb-top">
-    <div class="sb-logo">
-      <div class="sb-logo-title">Playbook de Vendas</div>
-      <div class="sb-logo-sub">Playbook de Vendas</div>
-      <div id="sync-badge" style="font-size:10px;margin-top:6px;display:flex;align-items:center;gap:4px"></div>
-    </div>
-    <div class="sb-section-title">Operação</div>
-    <button id="btn-db" class="sb-btn" style="--ac:#3b82f6;"><i class="ti ti-layout-dashboard" style="font-size:15px;flex-shrink:0"></i>Minhas Calls</button>
-    <div class="sb-section-title">Playbook</div>
-    <div id="nav"></div>
-  </div>
-  <div class="sb-bottom" style="width:100%; border-top:1px solid #1e293b; padding-top:4px;">
-    <button id="btn-cfg" class="sb-btn" style="--ac:#64748b;"><i class="ti ti-settings" style="font-size:15px;flex-shrink:0"></i>Configurações</button>
-  </div>
-</nav>
-
-<div class="main-wrapper">
-  <div id="call-banner-container"></div>
-  <main class="cnt" id="content"></main>
-</div>
-
-<div id="modal-container" class="hidden"></div>
-
-<script src="./scripts/playbook-content.js"></script>
-<script src="./scripts/app.js"></script>
-</body>
-</html>
+const M=[
+{id:0,icon:"ti-brain",label:"Mentalidade",accent:"#8B5CF6",title:"Mentalidade & princípios",sub:"A base de tudo — o que o closer sênior pensa antes de entrar na call.",s:[
+{t:"P",h:"Princípio-mãe",b:"Você não conduz uma conversa. Você conduz uma tomada de decisão.\n\nApresentador conduz conversa. Closer conduz decisão. A reunião não existe para o lead te conhecer — existe para o lead ter clareza suficiente para decidir."},
+{t:"FW",h:"Postura challenger",items:[{l:"Ensinar",d:"Trazer um insight que o lead não tinha antes de falar com você. Mostrar um risco ou custo que ele não enxergava."},{l:"Provocar",d:"Fazer o lead sentir o custo de não resolver agora. Não seja o vendedor simpático — seja o consultor que incomoda na dose certa."},{l:"Prescrever",d:"Recomendar o plano certo, não apresentar cardápio. Closer sênior não pergunta 'qual você prefere?'."}]},
+{t:"TBL",h:"Leitura DISC rápida",sub:"Você tem ~2 minutos de abertura para calibrar o perfil. Muda tom, ritmo e tipo de prova.",cols:["Perfil","Sinal na call","Como adaptar"],rows:[["D — Dominante","Direto, impaciente, fala de resultado","Rápido ao ponto, dados e ROI, sem rodeio"],["I — Influente","Expansivo, fala de pessoas, entusiasta","Energia alta, conecte emocionalmente, cases"],["S — Estável","Cauteloso, pergunta sobre suporte","Traga segurança, fale de implantação, não force"],["C — Analítico","Perguntas técnicas, detalhes, comparações","Dados precisos, respeite o processo"]]},
+{t:"W",h:"Regras inegociáveis",items:["Não improvisa estrutura sob pressão","Não entra em preço antes de construir valor","Não faz demo sem tese de valor estabelecida","Não termina call sem próximo passo datado","Não aceita 'vou pensar' como fim de conversa","Não confunde simpatia com condução de decisão"]}
+]},
+{id:1,icon:"ti-checklist",label:"Pré-call",accent:"#06B6D4",title:"Pré-call — preparação e auditoria",sub:"Você não controla o que o SDR entregou. Controla o que faz nos 10 minutos antes de entrar.",s:[
+{t:"P",h:"Princípio",b:"Preparação não é ler o SPICED. É chegar com três coisas definidas: o que você já sabe, o que precisa descobrir e o que vai provar nessa call."},
+{t:"ST",h:"Protocolo de 10 minutos",items:[{l:"Audite o SPICED (2 min)",d:"Classifique cada campo: dado real | genérico | faltando.\n\nFaltando → vira pergunta obrigatória nos primeiros 5 min. Ausências frequentes: nome de todos os participantes, prazo de decisão, sistemas concorrentes, evento crítico real, volume de atendimentos.\n\nConflitante → ignore e resolva na abertura. Não chute."},{l:"Pesquise a clínica (5 min)",d:"Google, Instagram, site, Google Maps (avaliações).\n\nO que você quer saber: existe e tem presença? Quantos profissionais aparecem? Bate com o SDR? O que os pacientes reclamam?\n\nIsso calibra seu tom e qual ângulo de dor atacar primeiro."},{l:"Defina seus 3 objetivos (1 min)",d:"1. Dor específica e custo real identificados\n2. Decisor, timing e critério de decisão mapeados\n3. SAL assinado ou próximo passo datado com decisor presente\n\nSem nenhum dos três, a call foi fraca — independente de como pareceu."},{l:"Hipótese de solução (1 min)",d:"Com base no que você tem, qual plano faz mais sentido? Você vai entrar com hipótese e validar no diagnóstico. Evita chegar zerado e improvisar durante a call."}]},
+{t:"CL",h:"Checklist pré-call",items:["Sei quem vai estar na call e o papel de cada um","Sei qual é o sistema atual (ou se não tem nenhum)","Sei o tamanho aproximado da operação","Tenho hipótese sobre a dor principal","Sei quais informações são obrigatórias descobrir","Tenho hipótese de plano para esse perfil"]}
+]},
+{id:2,icon:"ti-rocket",label:"Abertura",accent:"#F59E0B",title:"Abertura — controle e upfront contract",sub:"Os primeiros 3 minutos determinam quem conduz a reunião.",s:[
+{t:"P",h:"Princípio",b:"Se você não assume o controle, o lead assume. E lead que conduz vira tour de produto — você perde 40 minutos para ouvir 'vou pensar'."},
+{t:"S",h:"Upfront contract (Modificado)",sub:"Garante autoridade e alinhamento prévio antes de abrir telas.",b:"Então [Lead], antes de iniciarmos, vou colocar para gravar para fins de documentação e também posso compartilhar com você posteriormente, combinado?\n\n[Nome], normalmente a conversa dura em torno de 40 a 60 minutos. A/O SDR já me passou as informações e, com isso, eu já ajustei previamente a ferramenta para focar nas necessidades de vocês.\n\nNo início, vamos aprofundar mais no contexto atual com algumas perguntas e, quando eu for apresentar, foco somente nas ferramentas necessárias. Com base nelas, ao final, definimos o plano em conjunto e alinhamos o próximo passo. Todos de acordo?"},
+{t:"FW",h:"Por que o upfront contract funciona",items:[{l:"Garante Documentação",d:"O aviso de gravação resolve o problema do decisor ausente (você pode enviar a call gravada depois)."},{l:"Sinaliza Preparo",d:"Dizer que 'ajustou a ferramenta previamente' destrói a barreira defensiva do lead e constrói valor imediato."},{l:"Foco Cirúrgico",d:"Cria a expectativa certa de uma demo hiper-personalizada, blindando contra distrações."},{l:"Elimina Escape Hatch",d:"Trocar a palavra 'proposta' por 'definimos o plano em conjunto e alinhamos o próximo passo' mantém a co-propriedade sem dar uma desculpa mental para ele fugir e 'pensar em um PDF'."}]},
+{t:"S",h:"Qualificar participantes",sub:"Se o SDR não informou quem vai participar:",b:"[Nome], além de você, quem mais vai estar nessa conversa hoje?"},
+{t:"W",h:"Erros proibidos",items:["Abertura longa e explicativa ('então, como eu gosto de conduzir...')","Começar com perguntas que o SDR deveria ter feito, sem contextualizar","Não alinhar tempo disponível antes de começar","Não plantar o que acontece no final da call"]}
+]},
+{id:3,icon:"ti-stethoscope",label:"Diagnóstico",accent:"#10B981",title:"Diagnóstico — SPIN + qualificação de decisão",sub:"Demo fraca com diagnóstico forte fecha. Demo perfeita com diagnóstico raso não fecha.",s:[
+{t:"P",h:"Princípio",b:"O diagnóstico tem dois objetivos: (1) entender a dor específica e o custo real de não resolver; (2) mapear como a decisão vai acontecer. Os dois, sem exceção, antes de abrir o sistema."},
+{t:"ST",h:"Estrutura SPIN adaptada",items:[{l:"S — Situação (rápido)",d:"O SDR já deveria ter coletado. Valide o essencial, não faça interrogatório.\n\n• 'O que vocês usam hoje para agenda e prontuário?'\n• 'Quantos profissionais estão na clínica?'\n• 'Convênio, particular ou os dois?'\n\nRegra: máximo 3 perguntas de situação."},{l:"P — Problema (dor específica)",d:"• 'O que fez vocês buscarem um sistema agora?'\n• 'Onde mais está pesando: agenda, prontuário, financeiro ou comunicação?'\n• 'O que está mais travando a operação no dia a dia?'\n\nNão UAE resposta genérica. Se disserem 'é tudo muito manual': 'Me dá um exemplo de ontem — o que aconteceu que não deveria ter precisado de você?'"},{l:"I — Implicação (custo da dor) — OBRIGATÓRIO",d:"• 'Isso impacta mais tempo, dinheiro, organização ou risco para os pacientes?'\n• 'Se isso continuar por mais 60 dias, o que piora primeiro?'\n• 'Quanto tempo por semana vai pra esse tipo de tarefa?'\n• 'Já perderam paciente por problema de agenda ou comunicação?'\n\n🚨 CUSTO DO SISTEMA ATUAL: Mapeie exatamente quanto pagam hoje na plataforma atual. Isso forma a equação ideal: custo atual + custo da inação = custo do status quo. Sem isso, o lead compara o preço da Playbook com zero — e zero sempre parece melhor."},{l:"N — Necessidade (faça o lead verbalizar)",d:"• 'O que precisaria mudar para isso não ser mais um problema?'\n• 'Se tivessem a ferramenta ideal, o que ela faria que hoje não acontece?'\n\nUse as palavras dele — não sinônimos seus. Você vai precisar delas na tese de valor."}]},
+{t:"FW",h:"Qualificação de decisão — dentro do diagnóstico",sub:"Não é um bloco separado. Entra após a dor estar mapeada.",items:[{l:"Quem decide",d:"'Além de você, quem mais participa dessa decisão?' / 'A sócia vai estar na call ou vocês alinharam antes?'"},{l:"Timing",d:"'Têm uma data em mente para ter isso resolvido?' / 'O que acontece se demorar mais 30 dias para decidir?'"},{l:"Critério",d:"'O que vão comparar para tomar essa decisão?' / 'Tem funcionalidade obrigatória — sem ela não avançam?'"},{l:"Competição",d:"'Estão vendo outras plataformas?' / 'O que mais fez sentido no que viram até agora?'"}]},
+{t:"RF",h:"Red flags e como reagir",items:[{f:"Lead sem decisor (Tática de Aliança / Ally Move)",r:"Execute o compromisso emocional antes de envolver o decisor ausente:\n\n'Se a decisão dependesse apenas de você hoje, fecharíamos acordo?'\n\nSe o lead disser sim → 'Perfeito! Então preciso que você me ajude a garantir que sua sócia veja o que você viu com a mesma clareza. Vamos desenhar o próximo passo juntos como aliados.'"},{f:"Lead sem urgência real",r:"Aprofunde implicação. Se não existe urgência real, busque timeline real: 'Se não é urgente agora, quando precisam ter isso rodando?'"},{f:"Lead comparando concorrente",r:"'Faz sentido. O que mais estão avaliando?' Use como inteligência competitiva, não como ameaça."}]},
+{t:"W",h:"Erros proibidos",items:["Interrogatório de situação sem ir para dor e implicação","Aceitar resposta vaga e seguir sem aprofundar","Não mapear decisor, timing e critério antes da demo","Fazer perguntas que não mudam o que você faz na call"]}
+]},
+{id:4,icon:"ti-bulb",label:"Tese de valor",accent:"#F59E0B",title:"Tese de valor — resumir antes de demonstrar",sub:"A demo só começa depois da tese. Sempre.",s:[
+{t:"P",h:"Princípio",b:"Sem tese, o lead vê um produto. Com tese, ele vê a solução para o problema dele. A atenção é diferente. O engajamento é diferente. A aderência é diferente."},
+{t:"S",h:"Estrutura da tese",b:"Pelo que você me trouxe, hoje o principal problema está em [DOR ESPECÍFICA], isso está gerando [IMPLICAÇÃO REAL], e o que vocês precisam é [NECESSIDADE VERBALIZADA].\n\nEntão o que vou te mostrar é exatamente como a Playbook resolve esses pontos — sem te fazer um tour do sistema. Vou focar no que importa pra vocês."},
+{t:"S",h:"Exemplo real",sub:"Clínica multidisciplinar sem sistema:",b:"Pelo que você me trouxe, o problema principal é que cada profissional usa uma forma diferente de registrar atendimento — isso gera retrabalho na recepção e vocês não têm visibilidade centralizada da operação.\n\nO que vocês precisam é de um prontuário flexível por especialidade e uma agenda que a recepção controle de um lugar só. Isso é exatamente o que vou te mostrar agora."},
+{t:"T",h:"Regra de ouro",b:"A tese precisa ter as palavras que o lead usou — não sinônimos seus. Palavras dele. Isso prova que você ouviu e cria espelho emocional antes da demo."},
+{t:"W",h:"Erros proibidos",items:["Abrir o sistema sem resumir o problema","Tese genérica que serve para qualquer clínica","Demo antes da tese de valor"]}
+]},
+{id:5,icon:"ti-device-desktop",label:"Demo orientada",accent:"#3B82F6",title:"Demo orientada — provar aderência, não mostrar tudo",sub:"O lead não compra funcionalidade. Compra resolução de problema.",s:[
+{t:"T",h:"Regra dos 3 provas",b:"Máximo 3 momentos de prova por call — um por dor identificada. Não mais.\n\nSe o lead pedir pra ver outra coisa: 'Consigo te mostrar isso sim. Deixa eu terminar de mostrar o que é essencial e depois a gente abre espaço pra dúvidas. Combinado?'"},
+{t:"ST",h:"Estrutura de cada prova",items:[{l:"1. Relembra a dor",d:"'Você comentou que hoje [DOR ESPECÍFICA].'"},{l:"2. Mostra a solução",d:"'Aqui é onde isso muda.' — abre o sistema e demonstra."},{l:"3. Traduz em valor",d:"'Isso significa que [IMPACTO RESOLVIDO NA PRÁTICA].'"}]},
+{t:"S",h:"Exemplo de prova",b:"'Você comentou que cada profissional registra de um jeito diferente. Aqui no prontuário da Playbook, cada especialidade tem seu próprio modelo — fisioterapia, psicologia, fonoaudiologia — configurado separadamente.\n\nO que isso significa na prática: a recepcionista abre um prontuário e já sabe o que o profissional preencheu, sem precisar perguntar.'"},
+{t:"S",h:"Lidar com curiosidade fora do escopo",b:"'Boa pergunta. Isso existe sim. Vou anotar pra cobrir depois — deixa eu mostrar primeiro o que é core pra vocês.'"},
+{t:"W",h:"O que não mostrar",items:["Módulos que o lead não mencionou como dor","Funcionalidades avançadas fora do escopo atual da clínica","Configurações e telas de setup (isso é onboarding, não venda)","Tour completo do sistema"]}
+]},
+{id:6,icon:"ti-circle-check",label:"Checagem",accent:"#10B981",title:"Checagem de aderência — validar antes do preço",sub:"Objeção não é uma fase. É sintoma de diagnóstico mal feito ou valor mal construído.",s:[
+{t:"P",h:"Princípio",b:"Se surgir objeção aqui, é um sinal para você — não uma surpresa. Você não trata objeção nesse momento. Você identifica se ela existe antes de ir para o preço."},
+{t:"FW",h:"Perguntas de checagem",items:[{l:"Aderência geral",d:"'Do que eu te mostrei, o que mais fez sentido para o cenário de vocês?'"},{l:"Resolução da dor",d:"'Você sente que isso resolve o principal gargalo que você me trouxe?'"},{l:"Dúvidas técnicas",d:"'Ficou alguma dúvida funcional — algo que precisaria ver antes de avançar?'"},{l:"Funcionalidade obrigatória",d:"'Tem alguma funcionalidade que seria obrigatória e que você não viu?'"}]},
+{t:"TBL",h:"Classificar a objeção",sub:"O que você está mapeando nessa fase:",cols:["Tipo","O que é","Como reagir"],rows:[["Funcionalidade","Falta algo que ele precisa","Resolve ou reposiciona o que a Playbook entrega"],["Processo","Não entendeu como vai funcionar","Explore o que falta e mostre novamente"],["Preço (cedo demais)","Perguntou o valor antes da ancoragem","'O investimento a gente alinha logo. Antes: isso resolve o problema?'"],["Decisor ausente","Precisa mostrar para outra pessoa","Mapeia e endereça nos próximos passos"]]}
+]},
+{id:7,icon:"ti-anchor",label:"Ancoragem",accent:"#F97316",title:"Ancoragem + compromisso",sub:"Preço sem ancoragem é desconto esperando para acontecer.",s:[
+{t:"P",h:"Princípio",b:"Você precisa estabelecer o custo de não decidir antes de trazer o número do contrato. Quem vê o preço primeiro, sem ancoragem, reage ao número — não ao valor."},
+{t:"ST",h:"Sequência de ancoragem",items:[{l:"Custo da inação",d:"'Você me disse que a recepção perde em média [X horas] por semana com tarefas manuais. Em 3 meses, isso é [X×12 horas]. Sem contar o risco de erro de agenda ou prontuário incompleto.'\n\nSe o lead não deu números, estime e peça confirmação: 'Me corrija se eu estiver errado — se são 8 profissionais com 20 atendimentos por semana, vocês gerenciam 160 atendimentos semanalmente de forma manual. Isso soa certo?'"},{l:"Ancoragem de referência",d:"Estabeleça um custo de referência antes do preço do contrato.\n\n'Uma recepcionista custa em média R$2.000/mês. Se o sistema economiza 1 dia por semana de trabalho dela, estamos falando de R$500/mês de custo de inação. Todo mês.'"},{l:"Recomendação prescritiva",d:"Closer sênior não apresenta cardápio. Prescreve.\n\n'Pelo cenário de vocês — 8 profissionais, multidisciplinar, sem sistema atual — o que faz sentido é o plano [X]. Ele cobre agenda, prontuário por especialidade e comunicação. O plano básico limita [Y] e vocês já vão sentir isso em 60 dias.'"}]},
+{t:"P",h:"Compromisso Pré-Preço (Pre-Price Commitment)",b:"Garante a amarração estratégica e traz à tona objeções ocultas antes de apresentar os valores financeiros.\n\nScript de Fechamento:\n'Lead, você me disse que é o decisor, me confirmou que é urgente resolver esse problema e me confirmou que o que eu te apresentei resolve essa necessidade. Agora, antes de passar para os valores, eu quero assumir um compromisso com você: Se os valores se encaixarem dentro da sua realidade financeira, posso te considerar um cliente?'\n\nNuance Crítica: O resumo das três confirmações (decisor, urgência e solução) precisa ser colado exatamente às palavras e jargões que o lead usou durante a call, nunca os seus. Se ele hesitar ou disser 'não', trate a objeção invisível antes de falar em dinheiro."}
+]},
+{id:8,icon:"ti-currency-dollar",label:"Preço",accent:"#EAB308",title:"Preço e defesa de valor",sub:"Preço é consequência do valor construído — nunca isolado.",s:[
+{t:"S",h:"Estrutura de apresentação",sub:"Sempre nessa ordem:",b:"1. Relembra o problema\n2. Relembra o valor provado\n3. Apresenta o plano recomendado\n4. Apresenta o preço\n\n— — —\n\n'Pelo cenário de vocês: o problema principal é [DOR], gerando [IMPLICAÇÃO]. A Playbook resolve isso com [SOLUÇÃO]. O plano que faz sentido é o [PLANO], no investimento de R$ [PREÇO]/mês.'"},
+{t:"ST",h:"Defesa de valor — sem desconto imediato",items:[{l:"Lead reage ao preço",d:"Não desconte. Explore primeiro.\n\n'O que ficou caro — o valor total ou o que ele entrega?'\n\nEntenda a objeção real antes de qualquer movimento."},{l:"Percepção de valor baixa",d:"'Faz sentido. De outro ângulo: vocês pagam hoje [custo de inação]. A Playbook resolve isso por [preço]. O retorno acontece rápido.'"},{l:"Comparação com concorrente mais barato",d:"'Entendo. Qual sistema você viu? O que ele entrega que faz sentido pra vocês?' — Use para diferenciar, nunca para atacar o concorrente diretamente."}]},
+{t:"S",h:"Isolamento de objeção de preço",b:"'Se o investimento não fosse uma questão, você avançaria?'\n\n→ Se sim: o problema é preço. Trabalhe o preço.\n→ Se não: tem outra objeção escondida. Mapeia antes de continuar."},
+{t:"T",h:"Protocolo de desconto",b:"Só desconte se: (1) você esgotou a defesa de valor; (2) o lead verbalizou que o problema é preço, não valor; (3) você tem margem aprovada.\n\nNunca desconte como primeiro movimento. Nunca sem condicionar:\n\n'Consigo ver o que é possível fazer — mas preciso que você confirme que, se o investimento fizer sentido, a gente avança hoje.'"}
+]},
+{id:9,icon:"ti-target",label:"Fechamento",accent:"#EF4444",title:"Fechamento — direto, sem rodeio",sub:"Fechamento não é uma técnica. É a consequência natural de valor bem construído.",s:[
+{t:"P",h:"Princípio",b:"Closer que tem medo de fechar transmite medo. O lead sente hesitação e interpreta como sinal de que o produto não é tão certo assim."},
+{t:"S",h:"Quando o lead está pronto",b:"'Faz sentido avançarmos agora?'\n\nDireto. Sem rodeio. Sem 'o que você acha?' ou 'se quiser podemos...'"},
+{t:"ST",h:"Protocolo 'vou pensar'",sub:"Nunca aceite como fim. É o começo da objeção real.",items:[{l:"Passo 1 — explore",d:"'Claro. Me ajuda a entender — pensar sobre o quê exatamente?'"},{l:"Passo 2 — classifique",d:"• 'Preciso ver com minha sócia' → decisor ausente\n• 'Quero comparar com outra plataforma' → competição\n• 'Preciso ver o orçamento' → preço\n• 'Não tenho urgência agora' → timeline"},{l:"Passo 3 — endereça",d:"Decisor ausente (Ally Move): 'Se a decisão dependesse apenas de você, fecharíamos acordo? Próximo passo não é proposta. É garantir que [nome] veja o que você viu com a mesma clareza. Me ajude a construir essa ponte.'\n\nCompetição: 'O que mais está avaliando? O que precisa ver pra decidir?'\n\nPreço: 'Se o investimento não fosse questão, você avançaria?'\n\nTimeline: 'Qual a data limite para ter isso rodando? Se é [data], a decisão precisa acontecer até [X dias antes].'"}]},
+{t:"S",h:"Isolamento de objeção",b:"'Se eu resolver [objeção específica], você avança?'\n\nIsso isola se é a objeção real ou se tem mais coisa escondida embaixo."},
+{t:"W",h:"Erros proibidos",items:["Aceitar 'vou pensar' e agendar follow-up vago","Enviar proposta sem próximo passo acordado","Fechar com fraqueza: 'Me manda mensagem quando quiser'","Dar desconto sem condicionar o avanço","Não fechar por medo de parecer invasivo"]}
+]},
+{id:10,icon:"ti-calendar",label:"Próximos passos",accent:"#8B5CF6",title:"Próximos passos — ação + data + responsável + critério",sub:"Sem isso, a reunião terminou fraca — independente de como pareceu.",s:[
+{t:"P",h:"Princípio",b:"Toda call termina com ação + data + responsável + critério. Follow-up vago não é próximo passo — é esperança."},
+{t:"ST",h:"Cenários e protocolos",items:[{l:"Cenário 1 — SAL fechado",d:"'Perfeito. Vou te enviar o contrato agora pelo [canal]. Você consegue assinar ainda hoje? Posso te ajudar com alguma dúvida do documento enquanto você olha?'"},{l:"Cenário 2 — segundo momento com decisor",d:"'Então ficou assim: você alinha com [nome] ainda hoje. Amanhã às [hora] a gente se fala com ela também, para garantir que ela veja o que você viu. Eu te mando o convite agora. Fechado?'\n\nRegra: você envia o convite. Não deixa o lead 'te mandar horário'. Quem age mantém controle."},{l:"Cenário 3 — lead em comparação",d:"'Faz sentido ver as opções. Você consegue fechar essa análise até [data]? O que vai comparar — funcionalidade, preço ou suporte?'\n\nUse as respostas para qualificar a próxima call."},{l:"Cenário 4 — lead sem urgência real",d:"'Qual é a data limite para ter um sistema rodando? Se é [data], a implantação leva [X dias] — a decisão precisa acontecer até [data anterior]. Faz sentido marcar uma conversa de decisão para [X dias antes]?'"}]},
+{t:"S",h:"Script universal de encerramento",b:"'Então ficou assim: [ação], até [data], [quem faz], com base em [critério]. Correto?'"}
+]},
+{id:11,icon:"ti-users",label:"Indicação",accent:"#06B6D4",title:"Indicação — ampliar funil sem SDR",sub:"Menor custo, maior conversão. But timing errado queima a relação.",s:[
+{t:"T",h:"Quando pedir",b:"Só após SAL assinado ou após o lead demonstrar satisfação clara. Nunca antes da decisão — parece desespero.\n\nMomento ideal:\n• Logo após SAL assinado\n• Quando o lead elogia espontaneamente\n• No follow-up pós-implantação bem-sucedida"},
+{t:"S",h:"Como pedir sem parecer desesperado",b:"'[Nome], você mencionou que veio por indicação — isso diz muito sobre como vocês funcionam nessa rede de saúde.\n\nVocê conhece outras clínicas com desafios parecidos com os que você tinha? Não precisa ser agora, mas se pintar alguém que eu possa ajudar da mesma forma, fico feliz em conversar.'"},
+{t:"FW",h:"Por que esse script funciona",items:[{l:"Contextualizado",d:"Referencia o fato de ter vindo por indicação — cria reciprocidade natural."},{l:"Com critério",d:"'Desafios parecidos' qualifica — você não quer qualquer nome."},{l:"Sem pressão",d:"'Não precisa ser agora' elimina a sensação de obrigação imediata."},{l:"Posicionamento",d:"Você como solução, não como vendedor pedindo favor."}]},
+{t:"W",h:"O que não dizer",items:["'Você conhece alguém que pode precisar?' — genérico, sem critério, parece desesperado"]}
+]},
+{id:12,icon:"ti-chart-bar",label:"Scorecard",accent:"#EC4899",title:"Scorecard + revisão de call",sub:"Transformar cada call em dado para evolução, não em memória.",s:[
+{t:"P",h:"Pergunta-mãe da revisão",b:"Em qual momento eu perdi condução da decisão?\n\nNão: 'O que eu poderia ter falado melhor?'\nMas: 'Onde a venda deixou de andar?'"},
+{t:"T",h:"Como assistir suas calls",b:"Não assista para ouvir o que você disse. Assista para identificar onde a venda parou de andar.\n\nMeta: 80%+ de aderência processual antes de obsessão por conversão."},
+{t:"SC",h:"Scorecard por bloco",sub:"Feedback real: cores só mudam mediante clique ativo.",items:[
+"Upfront contract (aviso gravação, sem 'proposta', ajustado prévio)",
+"Diagnóstico: dor específica identificada",
+"Diagnóstico: custo do sistema atual mapeado + implicação",
+"Qualificação: decisor, timing e critério mapeados (Tática Aliança)",
+"Tese de valor antes da demo (utilizando palavras do lead)",
+"Demo: máximo 3 provas conectadas rigidamente à dor",
+"Checagem de aderência explícita antes do preço",
+"Ancoragem e custo da inação quantificados",
+"Compromisso Pré-Preço (Pre-price commitment assinalado)",
+"Recomendação prescritiva clara (sem menu de cardápio)",
+"Defesa estruturada de valor antes de ceder desconto",
+"Fechamento direto e próximo passo datado com critério"
+]},
+{t:"ST",h:"Perguntas de revisão por bloco",items:[{l:"Abertura",d:"• Assumi controle?\n• Alinhei tempo e estrutura?\n• Plantei consequência (próximo passo)?\n• Sei quem estava na call e o papel de cada um?"},{l:"Diagnóstico",d:"• A dor ficou específica (não genérica)?\n• O custo de não resolver foi quantificado?\n• Sei quem decide, quando e como?"},{l:"Demo",d:"• Fiz tese antes de abrir o sistema?\n• Mostrei 3 ou 13 coisas?\n• Conectei cada prova a uma dor específica?"},{l:"Fechamento",d:"• Recomendei ou apresentei cardápio?\n• Defendi valor antes de desconto?\n• Terminei com próximo passo datado e com critério?"}]}
+]}
+];
