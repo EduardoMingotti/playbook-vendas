@@ -1,43 +1,30 @@
-# Playbook de Vendas — V10.5.2
+# Playbook de Vendas / Cockpit de Calls Consultivas — V10.5
 
-## O que esta versão corrige
+## Foco desta versão
 
-- Restaura os gráficos do Cockpit.
-- Corrige **Apagar reunião** para chamar `action: deleteCall`.
-- Mantém a microcopy da V10.5.
-- Mantém a lista compacta mobile da V10.4.
-- Mostra badge `V10.5.2`.
+A V10.5 é uma revisão de UX/microcopy: ajustes simples em textos, botões, status e mensagens para reduzir ambiguidade para usuários novos.
 
-## Importante
+## Principais ajustes
 
-Este pacote é um patch completo para aplicar sobre a V10.5 já publicada. Ele inclui um `index.html` novo que carrega:
+- `Concluir execução` virou **Concluir reunião**.
+- `Arquivar Histórico` virou **Concluir e salvar**.
+- `Ver checklist` virou **Revisar checklist** / **Checklist preenchido**.
+- `Retomar` virou **Retomar reunião**.
+- `Adicionar reunião` virou **Adicionar nova reunião**.
+- `Apagar` virou **Apagar reunião**.
+- `Venda` é apresentado na interface como **Fechado**, sem alterar o valor interno para compatibilidade.
+- `Filtrar` virou **Aplicar filtros**.
+- Textos de erro/login ficaram menos acusatórios: também consideram conexão indisponível.
+- A lista compacta mobile da V10.4 foi mantida.
 
-```html
-./scripts/playbook-content.js
-./scripts/app-v10.5.js
-./scripts/patch-v10.5.2.js
-```
+## Sem alterações de banco
 
-Portanto, mantenha no GitHub os arquivos atuais da V10.5:
+Esta versão não altera planilha nem Apps Script. Use o backend V08 já instalado.
 
-```text
-scripts/playbook-content.js
-scripts/app-v10.5.js
-styles/main.v10.5.css
-```
+## V11 planejada
 
-E suba também os novos arquivos:
-
-```text
-scripts/patch-v10.5.2.js
-styles/patch-v10.5.2.css
-```
-
-## Como testar
-
-1. Abrir o app e confirmar badge `V10.5.2`.
-2. Confirmar que os gráficos aparecem no Cockpit.
-3. Apagar uma reunião teste.
-4. No DevTools > Network > Payload, confirmar `action: deleteCall`.
-5. Conferir `deletedAt` preenchido na `Calls_v2`.
-6. Limpar dados locais/cache e confirmar que a reunião apagada não volta.
+- Usuários e permissões.
+- Primeiro ADMIN atribuído ao Eduardo.
+- Leads/calls atuais migrados para propriedade inicial do ADMIN.
+- Campos futuros: `ownerUserId`, `ownerName`, `ownerEmail`.
+- Login, convite temporário, expiração de convite e expiração de sessão.
