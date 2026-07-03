@@ -1,0 +1,12 @@
+/* V10.5.3 — patch limpo */
+.version-badge{
+  position:fixed;right:8px;bottom:8px;z-index:9999;background:#0f172a;border:1px solid #334155;color:#94a3b8;border-radius:999px;padding:3px 8px;font-size:10px;opacity:.78
+}
+#charts-restored-v10-5-3{margin-top:18px}
+/* Menu mobile como overlay: não comprime a tela de trás */
+@media (max-width:768px){
+  #sb-nav.sb-open ~ .main-wrapper{transform:none!important;width:100%!important;transition:none!important}
+  .sb-backdrop.show{display:block!important;position:fixed!important;inset:0!important;background:rgba(0,0,0,.58)!important;z-index:940!important}
+  .sb{z-index:950!important}
+  .sb-toggle{z-index:980!important}
+}

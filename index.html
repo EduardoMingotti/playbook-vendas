@@ -9,9 +9,9 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <link rel="stylesheet" href="./styles/main.v10.5.css">
+<link rel="stylesheet" href="./styles/patch-v10.5.3.css">
 </head>
 <body class="app-locked">
-
 <div id="access-screen" class="access-screen">
   <div class="access-card">
     <div class="access-logo">$</div>
@@ -27,7 +27,6 @@
     <div class="access-note">A chave é salva apenas neste navegador. Você pode removê-la depois em <b>Configurações &gt; Remover chave salva neste navegador</b>.</div>
   </div>
 </div>
-
 <button id="sb-toggle" class="sb-toggle" aria-label="Abrir menu" aria-expanded="false"><span class="sb-toggle-lines" aria-hidden="true"><span></span><span></span><span></span></span></button>
 <div id="sb-backdrop" class="sb-backdrop"></div>
 <nav class="sb" id="sb-nav" aria-label="Módulos">
@@ -46,15 +45,13 @@
     <button id="btn-cfg" class="sb-btn" style="--ac:#64748b;"><i class="ti ti-settings" style="font-size:15px;flex-shrink:0"></i>Configurações</button>
   </div>
 </nav>
-
 <div class="main-wrapper">
   <div id="call-banner-container"></div>
   <main class="cnt" id="content"></main>
 </div>
-
 <div id="modal-container" class="hidden"></div>
-
 <script src="./scripts/playbook-content.js"></script>
 <script src="./scripts/app-v10.5.js"></script>
+<script src="./scripts/patch-v10.5.3.js"></script>
 </body>
 </html>
