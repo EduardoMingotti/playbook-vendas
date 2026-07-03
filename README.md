@@ -67,3 +67,5 @@ A ideia originalmente planejada para V11 fica registrada como pendência para um
 ## Observação
 
 Esta V11.0 não altera a planilha nem o Apps Script. Ela consolida frontend/UX e corrige fluxo de exclusão e dashboard.
+
+Teste de commit forçado aqui!
