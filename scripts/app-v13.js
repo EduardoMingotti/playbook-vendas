@@ -1090,7 +1090,48 @@ async function v13SyncOne(call){let old=v13Snapshots.get(call.id),current=call;i
 async function v13SyncChanges(){const changed=(state.calls||[]).filter(c=>{const o=v13Snapshots.get(c.id);return !o||v13Json(o)!==v13Json(c);});for(const c of changed)await v13SyncOne(c);localStorage.setItem(STORAGE_KEY,JSON.stringify(state));syncStatus='saved';updateSyncBadge();}
 function syncToRemote(){return v13SyncChanges();}
 async function validateTokenAndLoad(){return loadFromRemote();}
-async function initV13AccessGate(){loadFromStorage();const form=document.getElementById('login-form');if(form)form.addEventListener('submit',async e=>{e.preventDefault();clearAccessError();v13LoginLoading(true);try{const d=await v13Fetch('login',{email:document.getElementById('login-email').value.trim(),password:document.getElementById('login-password').value,userAgent:navigator.userAgent});localStorage.setItem(V13_SESSION_KEY,d.sessionToken);v13User=d.user;await v13Open();}catch(err){showAccessError(err.message||'Falha no acesso.');}finally{v13LoginLoading(false);}});document.getElementById('btn-logout')?.addEventListener('click',async()=>{try{await v13Fetch('logout');}catch(e){}v13Lock();});if(v13Token()){v13LoginLoading(true);try{const u=await v13Fetch('getCurrentUser',{},'GET');v13User=u.user;await v13Open();}catch(e){v13Lock(e.message);}finally{v13LoginLoading(false);}}else setTimeout(()=>document.getElementById('login-email')?.focus(),50);}
+async function initV13AccessGate(){loadFromStorage();const form=document.getElementById('login-form');if(form)form.addEventListener('submit',async e=>{e.preventDefault();clearAccessError();v13LoginLoading(true);try{const d=await v13Fetch('login',{email:document.getElementById('login-email').value.trim(),password:document.getElementById('login-password').value,userAgent:navigator.userAgent});localStorage.setItem(V13_SESSION_KEY,d.sessionToken);v13User=d.user;await v13Open();}catch(err){showAccessError(err.message||'Falha no acesso.');}finally{v13LoginLoading(false);}});document.getElementById('btn-logout')?.addEventListener('click',async()=>{try{await v13Fetch('logout');}catch(e){}v13Lock();});if (v13Token()) {
+  try {
+    const u = await v13Fetch('getCurrentUser', {}, 'GET');
+    v13User = u.user;
+
+    document.body.classList.remove('app-locked');
+    v13RenderUser();
+    setupMobileNav();
+
+    v13Overlay(true, 'Carregando suas reuniões...');
+
+    try {
+      await loadFromRemote();
+      state.active = 'dashboard';
+      state.activeCallId = null;
+      render();
+    } catch (loadError) {
+      console.error('Erro ao carregar reuniões:', loadError);
+
+      /*
+       * A sessão é válida.
+       * Um erro de carregamento não deve apagar o login.
+       */
+      render();
+      v13Toast(
+        loadError.message ||
+        'Não foi possível carregar as reuniões. Tente atualizar novamente.'
+      );
+    } finally {
+      v13Overlay(false);
+    }
+
+  } catch (authError) {
+    /*
+     * Só volta ao login quando a validação da sessão realmente falha.
+     */
+    v13Lock(
+      authError.message ||
+      'Sua sessão expirou. Entre novamente.'
+    );
+  }
+}else setTimeout(()=>document.getElementById('login-email')?.focus(),50);}
 async function v13Open(){document.body.classList.remove('app-locked');v13RenderUser();setupMobileNav();v13Overlay(true,'Carregando suas reuniões...');try{await loadFromRemote();state.active='dashboard';state.activeCallId=null;render();}finally{v13Overlay(false);}}
 async function deleteCall(id){const c=state.calls.find(x=>x.id===id);if(!c||!confirm('Deseja apagar esta reunião?'))return;v13Overlay(true,'Apagando reunião...');try{await v13Fetch('deleteCall',{id,expectedVersion:c.version});state.calls=state.calls.filter(x=>x.id!==id);v13Snapshots.delete(id);render();}catch(e){v13Toast(e.message);}finally{v13Overlay(false);}}
 async function importData(){const f=document.getElementById('import-file-field')?.files?.[0];if(!f)return alert('Selecione um arquivo JSON.');if(v13User?.role!=='ADMIN')return alert('A importação é permitida apenas para ADMIN.');v13Overlay(true,'Importando backup...');try{const j=JSON.parse(await f.text());if(!Array.isArray(j.calls))throw new Error('Backup sem lista de calls.');const d=await v13Fetch('importCalls',{calls:j.calls});await loadFromRemote();render();alert('Importação concluída: '+d.inserted+' inseridas; '+d.skipped+' ignoradas.');}catch(e){alert('Falha na importação: '+e.message);}finally{v13Overlay(false);}}
