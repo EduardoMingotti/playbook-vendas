@@ -1,1 +1,1 @@
-Pasta reservada para recursos estáticos opcionais.
+Recursos estáticos opcionais.
