@@ -193,3 +193,8 @@ body:not(.app-locked) .access-screen{display:none!important}.access-card{width:1
 /* ===== V13 CORREÇÕES ADITIVAS: preserva integralmente a V11 ===== */
 .sb{justify-content:space-between}.sb-bottom{width:100%;border-top:1px solid #1e293b;padding-top:4px}.v13-user-card{margin:8px 12px;padding:10px;border:1px solid #334155;border-radius:8px;background:#111827;font-size:12px}.v13-user-card small{display:block;color:#64748b;margin-top:3px}.v13-loading{display:flex;align-items:center;justify-content:center;gap:9px;margin-top:14px;color:#93c5fd;font-size:12px}.v13-spinner{display:inline-block;width:18px;height:18px;border:3px solid #334155;border-top-color:#3b82f6;border-radius:50%;animation:v13spin .7s linear infinite}@keyframes v13spin{to{transform:rotate(360deg)}}.v13-overlay{position:fixed;inset:0;z-index:4900;background:rgba(2,6,23,.7);display:flex;align-items:center;justify-content:center;gap:10px;color:#e2e8f0}.v13-toast{position:fixed;right:14px;bottom:14px;z-index:6000;background:#172033;border:1px solid #334155;border-radius:8px;padding:10px 13px;box-shadow:0 10px 30px #0008;font-size:12px}.v13-toast:empty{display:none}.btn-primary:disabled,.btn-secondary:disabled,.btn-danger:disabled{opacity:.58;cursor:wait}.v13-admin-actions{display:flex;gap:6px;flex-wrap:wrap}.v13-import-result{margin-top:10px;color:#4ade80;font-size:12px}
 @media(max-width:768px){#sb-nav.sb-open~.main-wrapper{transform:none!important;width:100%!important}.sb{padding-top:58px!important}.sb-btn{font-size:13px!important}.v13-overlay{padding:20px;text-align:center}.sticky-context{display:flex!important}}
+/* Correção V13 — ocultar indicadores após o carregamento */
+.v13-overlay.hidden,
+.v13-loading.hidden {
+  display: none !important;
+}
