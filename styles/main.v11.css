@@ -198,3 +198,50 @@ body:not(.app-locked) .access-screen{display:none!important}.access-card{width:1
 .v13-loading.hidden {
   display: none !important;
 }
+/* ===== Correção V13 — menu de ações do histórico ===== */
+
+/* Não cortar o menu no limite da tabela em telas maiores */
+@media (min-width: 769px) {
+  .history-table-wrap,
+  .tbl-wrap.history-table-wrap {
+    overflow: visible !important;
+  }
+}
+
+/* Mantém o botão e o menu acima das outras linhas */
+.action-menu-wrap {
+  position: relative;
+  z-index: 20;
+}
+
+.action-menu {
+  z-index: 9999 !important;
+}
+
+/* A linha que contém um menu aberto fica acima das demais */
+.history-table-wrap tr:has(.action-menu) {
+  position: relative;
+  z-index: 100;
+}
+
+/*
+  Nas quatro últimas linhas, abre o menu para cima.
+  Assim o menu não invade a paginação nem sai da tabela.
+*/
+.history-table-wrap tbody tr:nth-last-child(-n + 4) .action-menu {
+  top: auto !important;
+  bottom: 35px !important;
+}
+
+/* Em telas estreitas, deixa o menu mais compacto */
+@media (max-width: 768px) {
+  .history-table-wrap tbody tr:nth-last-child(-n + 5) .action-menu {
+    top: auto !important;
+    bottom: 35px !important;
+  }
+
+  .action-menu {
+    min-width: 190px !important;
+    max-width: calc(100vw - 32px);
+  }
+}
