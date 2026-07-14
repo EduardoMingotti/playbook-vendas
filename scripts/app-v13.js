@@ -1141,3 +1141,366 @@ function v13RenderAdmin(){const cnt=document.getElementById('content');cnt.inner
 async function v13LoadUsers(){try{const d=await v13Fetch('listUsers',{},'GET'),box=document.getElementById('v13-users');box.innerHTML='<div class="tbl-wrap"><table><thead><tr><th>Usuário</th><th>Perfil</th><th>Status</th><th>Ações</th></tr></thead><tbody>'+d.users.map(u=>'<tr><td><b>'+escapeHtml(u.name)+'</b><br><small>'+escapeHtml(u.email)+'</small></td><td>'+u.role+'</td><td>'+u.status+'</td><td><div class="v13-admin-actions">'+(u.status==='pending'?'<button class="table-action-btn" data-a="resendInvite" data-id="'+u.id+'">Reenviar convite</button>':'')+'<button class="table-action-btn" data-a="'+(u.status==='disabled'?'enableUser':'disableUser')+'" data-id="'+u.id+'">'+(u.status==='disabled'?'Ativar':'Desativar')+'</button><button class="table-action-btn" data-a="revokeUserSessions" data-id="'+u.id+'">Revogar sessões</button></div></td></tr>').join('')+'</tbody></table></div>';box.querySelectorAll('[data-a]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await v13Fetch(b.dataset.a,{userId:b.dataset.id});await v13LoadUsers();}catch(e){v13Toast(e.message);}finally{b.disabled=false;}});}catch(e){document.getElementById('v13-users').textContent=e.message;}}
 function v13NewUser(){showModal('Novo usuário','<div class="md-form"><div class="md-group"><label class="md-label">Nome</label><input id="v13-name" class="md-input"></div><div class="md-group"><label class="md-label">E-mail</label><input id="v13-email" type="email" class="md-input"></div><div class="md-group"><label class="md-label">Perfil</label><select id="v13-role" class="md-input"><option value="CLOSER">Closer</option><option value="ADMIN">Administrador</option></select></div><div class="md-btns"><button class="btn-secondary" onclick="closeModal()">Cancelar</button><button id="v13-create-user" class="btn-primary">Criar e convidar</button></div></div>');document.getElementById('v13-create-user').onclick=async()=>{const b=document.getElementById('v13-create-user');b.disabled=true;try{await v13Fetch('createUser',{name:document.getElementById('v13-name').value,email:document.getElementById('v13-email').value,role:document.getElementById('v13-role').value});closeModal();v13LoadUsers();}catch(e){v13Toast(e.message);}finally{b.disabled=false;}};}
 const v13OldSettings=renderSettings;renderSettings=function(){v13OldSettings();document.querySelectorAll('[onclick="resetAccessToken()"]')?.forEach(e=>e.remove());const cnt=document.getElementById('content');const session=mk('div','install-card');session.innerHTML='<h4><i class="ti ti-user-shield"></i> Sessão V13</h4><p>Usuário: <b>'+escapeHtml(v13User?.name||'')+'</b> · '+escapeHtml(v13User?.role||'')+'</p><button class="btn-secondary" id="v13-settings-logout">Sair da conta</button>';cnt.appendChild(session);document.getElementById('v13-settings-logout').onclick=()=>document.getElementById('btn-logout').click();};
+/* ============================================================
+   COACH IA — DOWNLOAD DO PROMPT EM MARKDOWN
+   Adição independente para a V13
+   ============================================================ */
+
+function coachIaFormatSection(section) {
+  if (!section) return '';
+
+  const title = section.h ? `### ${section.h}\n\n` : '';
+
+  if (section.t === 'P' || section.t === 'S' || section.t === 'T') {
+    return `${title}${section.b || ''}\n\n`;
+  }
+
+  if (section.t === 'W' || section.t === 'CL') {
+    const items = Array.isArray(section.items)
+      ? section.items.map(item => `- ${item}`).join('\n')
+      : '';
+
+    return `${title}${items}\n\n`;
+  }
+
+  if (section.t === 'ST' || section.t === 'FW') {
+    const items = Array.isArray(section.items)
+      ? section.items.map(item => {
+          return `- **${item.l || ''}:** ${item.d || ''}`;
+        }).join('\n')
+      : '';
+
+    return `${title}${items}\n\n`;
+  }
+
+  if (section.t === 'RF') {
+    const items = Array.isArray(section.items)
+      ? section.items.map(item => {
+          return [
+            `- **Red flag:** ${item.f || ''}`,
+            `  - **Como reagir:** ${item.r || ''}`
+          ].join('\n');
+        }).join('\n')
+      : '';
+
+    return `${title}${items}\n\n`;
+  }
+
+  if (section.t === 'TBL') {
+    const columns = Array.isArray(section.cols) ? section.cols : [];
+    const rows = Array.isArray(section.rows) ? section.rows : [];
+
+    if (!columns.length) return '';
+
+    const header = `| ${columns.join(' | ')} |`;
+    const separator = `| ${columns.map(() => '---').join(' | ')} |`;
+    const body = rows
+      .map(row => `| ${row.join(' | ')} |`)
+      .join('\n');
+
+    return `${title}${header}\n${separator}\n${body}\n\n`;
+  }
+
+  if (section.t === 'SC') {
+    const items = Array.isArray(section.items)
+      ? section.items.map((item, index) => {
+          return `${index + 1}. ${item}`;
+        }).join('\n')
+      : '';
+
+    return `${title}${items}\n\n`;
+  }
+
+  return '';
+}
+
+function coachIaBuildPlaybookContent() {
+  if (typeof M === 'undefined' || !Array.isArray(M)) {
+    return 'Conteúdo do playbook indisponível.';
+  }
+
+  return M.map(module => {
+    const sections = Array.isArray(module.s)
+      ? module.s.map(coachIaFormatSection).join('')
+      : '';
+
+    return [
+      `## Módulo ${String(module.id).padStart(2, '0')} — ${module.title}`,
+      '',
+      module.sub || '',
+      '',
+      sections
+    ].join('\n');
+  }).join('\n---\n\n');
+}
+
+function coachIaBuildPrompt() {
+  const playbookContent = coachIaBuildPlaybookContent();
+
+  return `# Coach IA — Avaliação de Reunião Comercial
+
+## Sua função
+
+Você é um Coach IA especializado em vendas consultivas.
+
+Analise a transcrição da reunião comercial usando exclusivamente o método e os critérios deste Playbook.
+
+Não faça apenas um resumo da conversa.
+
+O objetivo é avaliar:
+
+- a qualidade da condução comercial;
+- a capacidade de diagnóstico;
+- a construção de valor;
+- o controle do processo de decisão;
+- a aderência ao playbook;
+- os riscos que podem impedir o avanço;
+- os pontos que precisam ser corrigidos na próxima reunião.
+
+---
+
+## Regras obrigatórias da avaliação
+
+1. Use evidências concretas da transcrição.
+2. Cite frases ou momentos específicos da reunião.
+3. Não invente informações que não estejam na transcrição.
+4. Diferencie fatos de interpretações.
+5. Não atribua mérito ao closer apenas porque houve venda.
+6. Não penalize automaticamente o closer apenas porque não houve venda.
+7. Separe a qualidade da execução da facilidade ou dificuldade do cenário.
+8. Avalie cada item do scorecard individualmente.
+9. Use a escala de 0 a 2:
+   - 0 = não executado;
+   - 1 = parcialmente executado;
+   - 2 = bem executado.
+10. Explique o motivo de cada nota.
+11. Caso não exista evidência suficiente, informe isso explicitamente.
+12. Não seja excessivamente complacente nem excessivamente crítico.
+
+---
+
+## Estrutura obrigatória da resposta
+
+### 1. Resumo executivo
+
+Explique brevemente:
+
+- contexto da reunião;
+- situação do lead;
+- principal necessidade;
+- resultado final;
+- qualidade geral da condução.
+
+### 2. Diagnóstico da oportunidade
+
+Identifique:
+
+- dor específica;
+- impacto operacional;
+- impacto financeiro;
+- custo da inação;
+- urgência;
+- decisor;
+- timing;
+- critérios de decisão;
+- concorrentes ou alternativas;
+- riscos para o avanço.
+
+Quando alguma informação não tiver sido identificada, escreva:
+
+> Não identificado na transcrição.
+
+### 3. Avaliação do scorecard
+
+Avalie cada critério usando:
+
+- **Nota:** 0, 1 ou 2;
+- **Evidência:** trecho ou momento da transcrição;
+- **Análise:** por que a execução foi adequada, parcial ou ausente;
+- **Melhoria:** o que deveria ter sido feito.
+
+Critérios:
+
+1. Upfront contract e controle da abertura.
+2. Dor específica identificada.
+3. Custo do sistema atual e implicação quantificados.
+4. Decisor, timing e critério de decisão mapeados.
+5. Tese de valor antes da demonstração.
+6. No máximo três provas conectadas à dor.
+7. Checagem de aderência antes do preço.
+8. Ancoragem e custo da inação.
+9. Compromisso pré-preço.
+10. Recomendação prescritiva.
+11. Defesa de valor antes de desconto.
+12. Fechamento e próximo passo datado.
+
+### 4. Pontuação final
+
+Apresente:
+
+- pontos obtidos;
+- máximo de 24 pontos;
+- percentual de aderência;
+- classificação final.
+
+Use esta classificação:
+
+- 80% a 100%: alta aderência;
+- 60% a 79%: aderência intermediária;
+- abaixo de 60%: baixa aderência.
+
+### 5. Separação entre resultado e execução
+
+Avalie separadamente:
+
+#### Resultado comercial
+
+Explique o desfecho da oportunidade.
+
+#### Qualidade da execução
+
+Explique se a condução foi boa independentemente do resultado.
+
+#### Facilidade do cenário
+
+Informe se o cenário era:
+
+- favorável;
+- neutro;
+- difícil.
+
+Justifique usando evidências.
+
+### 6. Dois pontos fortes
+
+Apresente exatamente dois pontos fortes, com evidências da transcrição.
+
+### 7. Dois pontos críticos
+
+Apresente exatamente dois pontos críticos, priorizados pelo impacto na venda.
+
+### 8. Momento em que a venda perdeu força
+
+Responda:
+
+> Em qual momento a venda deixou de avançar ou correu maior risco?
+
+Use evidências da transcrição.
+
+### 9. Veredito final
+
+Escolha um:
+
+- Excelente condução;
+- Boa condução com oportunidades de melhoria;
+- Condução mediana;
+- Condução fraca;
+- Evidências insuficientes.
+
+Justifique objetivamente.
+
+### 10. Orientação para a próxima call
+
+Forneça uma única orientação prática, específica e aplicável.
+
+A orientação deve responder:
+
+> Qual comportamento o closer deve priorizar na próxima reunião?
+
+---
+
+# Playbook completo de referência
+
+${playbookContent}
+
+---
+
+# Transcrição para análise
+
+Cole a transcrição abaixo desta linha:
+
+`;
+}
+
+function downloadCoachIaPrompt() {
+  try {
+    const prompt = coachIaBuildPrompt();
+
+    const blob = new Blob(
+      [prompt],
+      { type: 'text/markdown;charset=utf-8' }
+    );
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = 'coach-ia-playbook-vendas-v13.md';
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+    if (typeof v13Toast === 'function') {
+      v13Toast('Prompt do Coach IA baixado com sucesso.');
+    }
+  } catch (error) {
+    console.error('Erro ao gerar prompt do Coach IA:', error);
+
+    if (typeof v13Toast === 'function') {
+      v13Toast('Não foi possível gerar o prompt do Coach IA.');
+    } else {
+      alert('Não foi possível gerar o prompt do Coach IA.');
+    }
+  }
+}
+
+/*
+ * Complementa a tela de Configurações existente.
+ * Não substitui nem remove as funções anteriores.
+ */
+const coachIaOriginalRenderSettings = renderSettings;
+
+renderSettings = function () {
+  coachIaOriginalRenderSettings();
+
+  const content = document.getElementById('content');
+
+  if (!content || document.getElementById('coach-ia-card')) {
+    return;
+  }
+
+  const card = document.createElement('div');
+
+  card.id = 'coach-ia-card';
+  card.className = 'install-card';
+
+  card.innerHTML = `
+    <h4>
+      <i class="ti ti-sparkles"></i>
+      Coach IA
+    </h4>
+
+    <p>
+      Baixe o guia completo de avaliação para usar junto com a
+      transcrição de uma reunião comercial.
+    </p>
+
+    <button
+      id="download-coach-ia-btn"
+      class="btn-primary"
+      type="button"
+    >
+      <i class="ti ti-file-download"></i>
+      Baixar Prompt do Coach IA (.md)
+    </button>
+  `;
+
+  content.appendChild(card);
+
+  document
+    .getElementById('download-coach-ia-btn')
+    .addEventListener('click', downloadCoachIaPrompt);
+};
