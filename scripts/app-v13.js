@@ -1504,3 +1504,301 @@ renderSettings = function () {
     .getElementById('download-coach-ia-btn')
     .addEventListener('click', downloadCoachIaPrompt);
 };
+
+/* ============================================================
+   PATCH ADMINISTRACAO DE USUARIOS
+   Filtros locais, limpar filtros, editar, redefinir senha e
+   excluir logicamente. Reutiliza as classes CSS existentes.
+   ============================================================ */
+let v13AdminUsers=[];
+let v13UserFilters={search:'',role:'',status:'',includeDeleted:false};
+
+function v13RenderAdmin(){
+  const cnt=document.getElementById('content');
+  cnt.innerHTML=`
+    <div class="mod-title">Administração de usuários</div>
+    <div class="mod-sub">Crie, edite, filtre, desative, redefina senhas e exclua usuários.</div>
+
+    <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px;">
+      <div class="md-group" style="min-width:220px;flex:1;">
+        <label class="md-label" for="v13-user-search">Buscar</label>
+        <input id="v13-user-search" class="md-input" type="search" placeholder="Nome ou e-mail">
+      </div>
+
+      <div class="md-group" style="min-width:140px;">
+        <label class="md-label" for="v13-user-role-filter">Perfil</label>
+        <select id="v13-user-role-filter" class="md-input">
+          <option value="">Todos</option>
+          <option value="ADMIN">ADMIN</option>
+          <option value="CLOSER">CLOSER</option>
+        </select>
+      </div>
+
+      <div class="md-group" style="min-width:150px;">
+        <label class="md-label" for="v13-user-status-filter">Status</label>
+        <select id="v13-user-status-filter" class="md-input">
+          <option value="">Todos</option>
+          <option value="active">active</option>
+          <option value="pending">pending</option>
+          <option value="disabled">disabled</option>
+        </select>
+      </div>
+
+      <label class="md-row-check" style="min-height:38px;">
+        <input id="v13-include-deleted" type="checkbox">
+        <span>Mostrar excluídos</span>
+      </label>
+
+      <button id="v13-clear-user-filters" class="btn-secondary" type="button">Limpar filtros</button>
+      <button id="v13-new-user" class="btn-primary" type="button"><i class="ti ti-user-plus"></i> Novo usuário</button>
+    </div>
+
+    <div id="v13-user-filter-summary" class="sec-sub"></div>
+    <div id="v13-users"><div class="v13-loading"><span class="v13-spinner"></span> Carregando usuários...</div></div>
+  `;
+
+  document.getElementById('v13-new-user').onclick=v13NewUser;
+  document.getElementById('v13-user-search').value=v13UserFilters.search;
+  document.getElementById('v13-user-role-filter').value=v13UserFilters.role;
+  document.getElementById('v13-user-status-filter').value=v13UserFilters.status;
+  document.getElementById('v13-include-deleted').checked=v13UserFilters.includeDeleted;
+
+  let searchTimer=null;
+  document.getElementById('v13-user-search').addEventListener('input',event=>{
+    clearTimeout(searchTimer);
+    searchTimer=setTimeout(()=>{
+      v13UserFilters.search=event.target.value.trim();
+      v13RenderUsersTable();
+    },180);
+  });
+  document.getElementById('v13-user-role-filter').onchange=event=>{
+    v13UserFilters.role=event.target.value;
+    v13RenderUsersTable();
+  };
+  document.getElementById('v13-user-status-filter').onchange=event=>{
+    v13UserFilters.status=event.target.value;
+    v13RenderUsersTable();
+  };
+  document.getElementById('v13-include-deleted').onchange=async event=>{
+    v13UserFilters.includeDeleted=event.target.checked;
+    await v13LoadUsers();
+  };
+  document.getElementById('v13-clear-user-filters').onclick=()=>{
+    v13UserFilters={search:'',role:'',status:'',includeDeleted:false};
+    v13RenderAdmin();
+  };
+
+  v13LoadUsers();
+}
+
+async function v13LoadUsers(){
+  const box=document.getElementById('v13-users');
+  if(box)box.innerHTML='<div class="v13-loading"><span class="v13-spinner"></span> Carregando usuários...</div>';
+  try{
+    const data=await v13Fetch(
+      'listUsers',
+      {includeDeleted:v13UserFilters.includeDeleted},
+      'GET'
+    );
+    v13AdminUsers=Array.isArray(data.users)?data.users:[];
+    v13RenderUsersTable();
+  }catch(error){
+    if(box)box.textContent=error.message;
+  }
+}
+
+function v13FilteredUsers(){
+  const term=v13UserFilters.search.toLowerCase();
+  return v13AdminUsers.filter(user=>{
+    if(!v13UserFilters.includeDeleted&&user.deletedAt)return false;
+    if(v13UserFilters.role&&user.role!==v13UserFilters.role)return false;
+    if(v13UserFilters.status&&user.status!==v13UserFilters.status)return false;
+    if(term){
+      const haystack=((user.name||'')+' '+(user.email||'')).toLowerCase();
+      if(!haystack.includes(term))return false;
+    }
+    return true;
+  });
+}
+
+function v13RenderUsersTable(){
+  const box=document.getElementById('v13-users');
+  if(!box)return;
+
+  const users=v13FilteredUsers();
+  const summary=document.getElementById('v13-user-filter-summary');
+  if(summary)summary.textContent='Mostrando '+users.length+' de '+v13AdminUsers.length+' usuários.';
+
+  if(!users.length){
+    box.innerHTML='<div class="empty-search-box">Nenhum usuário encontrado com os filtros atuais.</div>';
+    return;
+  }
+
+  box.innerHTML=`
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Usuário</th>
+            <th>Perfil</th>
+            <th>Status</th>
+            <th>Último login</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${users.map(user=>v13UserRowHtml(user)).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  box.querySelectorAll('[data-user-action]').forEach(button=>{
+    button.onclick=()=>v13HandleUserAction(
+      button.dataset.userAction,
+      button.dataset.userId
+    );
+  });
+}
+
+function v13UserRowHtml(user){
+  const deleted=Boolean(user.deletedAt);
+  const lastLogin=user.lastLoginAt?formatDateShort(user.lastLoginAt):'—';
+  const actions=[];
+
+  if(!deleted){
+    actions.push(`<button class="table-action-btn" data-user-action="edit" data-user-id="${escapeHtml(user.id)}">Editar</button>`);
+
+    if(user.status==='pending'){
+      actions.push(`<button class="table-action-btn" data-user-action="resendInvite" data-user-id="${escapeHtml(user.id)}">Reenviar convite</button>`);
+    }
+    if(user.status==='active'){
+      actions.push(`<button class="table-action-btn" data-user-action="sendPasswordReset" data-user-id="${escapeHtml(user.id)}">Redefinir senha</button>`);
+    }
+
+    actions.push(`<button class="table-action-btn" data-user-action="${user.status==='disabled'?'enableUser':'disableUser'}" data-user-id="${escapeHtml(user.id)}">${user.status==='disabled'?'Ativar':'Desativar'}</button>`);
+    actions.push(`<button class="table-action-btn" data-user-action="revokeUserSessions" data-user-id="${escapeHtml(user.id)}">Revogar sessões</button>`);
+    actions.push(`<button class="table-delete-btn" data-user-action="delete" data-user-id="${escapeHtml(user.id)}">Excluir</button>`);
+  }
+
+  return `
+    <tr${deleted?' style="opacity:.58"':''}>
+      <td>
+        <b>${escapeHtml(user.name||'')}</b><br>
+        <small>${escapeHtml(user.email||'')}</small>
+        ${deleted?'<div style="font-size:11px;color:#f87171;margin-top:3px;">Excluído logicamente</div>':''}
+      </td>
+      <td>${escapeHtml(user.role||'')}</td>
+      <td>${escapeHtml(user.status||'')}${deleted?' / deleted':''}</td>
+      <td>${escapeHtml(lastLogin)}</td>
+      <td><div class="v13-admin-actions">${actions.join('')}</div></td>
+    </tr>
+  `;
+}
+
+async function v13HandleUserAction(action,userId){
+  const user=v13AdminUsers.find(item=>item.id===userId);
+  if(!user)return;
+
+  if(action==='edit')return v13EditUser(user);
+  if(action==='delete')return v13DeleteUser(user);
+
+  const messages={
+    resendInvite:'Reenviar o convite inicial para este usuário?',
+    sendPasswordReset:'Enviar um link de redefinição de senha e revogar as sessões atuais?',
+    disableUser:'Desativar o acesso deste usuário?',
+    enableUser:'Ativar o acesso deste usuário?',
+    revokeUserSessions:'Revogar todas as sessões ativas deste usuário?'
+  };
+  if(!confirm(messages[action]||'Executar esta ação?'))return;
+
+  v13Overlay(true,'Atualizando usuário...');
+  try{
+    const result=await v13Fetch(action,{userId:userId});
+    v13Toast(result.message||'Ação concluída.');
+    await v13LoadUsers();
+  }catch(error){
+    v13Toast(error.message);
+  }finally{
+    v13Overlay(false);
+  }
+}
+
+function v13EditUser(user){
+  showModal('Editar usuário',`
+    <div class="md-form">
+      <div class="md-group">
+        <label class="md-label">Nome</label>
+        <input id="v13-edit-name" class="md-input" value="${escapeHtml(user.name||'')}">
+      </div>
+      <div class="md-group">
+        <label class="md-label">E-mail</label>
+        <input id="v13-edit-email" type="email" class="md-input" value="${escapeHtml(user.email||'')}">
+      </div>
+      <div class="md-group">
+        <label class="md-label">Perfil</label>
+        <select id="v13-edit-role" class="md-input">
+          <option value="CLOSER" ${user.role==='CLOSER'?'selected':''}>Closer</option>
+          <option value="ADMIN" ${user.role==='ADMIN'?'selected':''}>Administrador</option>
+        </select>
+      </div>
+      <div class="md-btns">
+        <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+        <button id="v13-save-user" class="btn-primary">Salvar alterações</button>
+      </div>
+    </div>
+  `);
+
+  document.getElementById('v13-save-user').onclick=async()=>{
+    const button=document.getElementById('v13-save-user');
+    const name=document.getElementById('v13-edit-name').value.trim();
+    const email=document.getElementById('v13-edit-email').value.trim();
+    const role=document.getElementById('v13-edit-role').value;
+
+    if(!name||!email){
+      v13Toast('Preencha nome e e-mail.');
+      return;
+    }
+
+    button.disabled=true;
+    try{
+      const result=await v13Fetch('updateUser',{
+        userId:user.id,
+        name:name,
+        email:email,
+        role:role
+      });
+      closeModal();
+      v13Toast('Usuário atualizado.');
+      await v13LoadUsers();
+      if(v13User&&v13User.id===result.user.id){
+        v13User={...v13User,...result.user};
+        v13RenderUser();
+      }
+    }catch(error){
+      v13Toast(error.message);
+    }finally{
+      button.disabled=false;
+    }
+  };
+}
+
+async function v13DeleteUser(user){
+  const confirmed=confirm(
+    'Excluir logicamente '+user.name+'?\n\n'+
+    'O usuário perderá o acesso e será ocultado da lista padrão. '+
+    'Leads, calls e histórico serão preservados.'
+  );
+  if(!confirmed)return;
+
+  v13Overlay(true,'Excluindo usuário...');
+  try{
+    await v13Fetch('deleteUser',{userId:user.id});
+    v13Toast('Usuário excluído logicamente.');
+    await v13LoadUsers();
+  }catch(error){
+    v13Toast(error.message);
+  }finally{
+    v13Overlay(false);
+  }
+}
