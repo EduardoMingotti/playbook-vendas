@@ -1086,7 +1086,208 @@ function resetAccessToken(){v13Lock('Sessão encerrada. Entre novamente.');}
 function saveToStorage(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state));scheduleRemoteSync();}
 function scheduleRemoteSync(){syncStatus='saving';updateSyncBadge();clearTimeout(syncTimer);syncTimer=setTimeout(()=>{v13SyncChain=v13SyncChain.then(v13SyncChanges).catch(e=>{console.error(e);syncStatus='error';updateSyncBadge();v13Toast(e.message);});},350);}
 function v13Json(v){return JSON.stringify(v??null);}
-async function v13SyncOne(call){let old=v13Snapshots.get(call.id),current=call;if(!old){const d=await v13Fetch('createCall',{call:current});Object.assign(current,d.call);v13Snapshots.set(current.id,JSON.parse(JSON.stringify(current)));return;}let version=Number(old.version||1);const send=async(action,p)=>{const d=await v13Fetch(action,{id:current.id,expectedVersion:version,...p});Object.assign(current,d.call);version=current.version;};try{if(v13Json(old.cl)!==v13Json(current.cl))await send('updateChecklist',{cl:current.cl||{}});if(v13Json(old.sc)!==v13Json(current.sc))await send('updateScorecard',{sc:current.sc||{}});if(v13Json(old.preCallNotes)!==v13Json(current.preCallNotes))await send('updatePreCall',{preCallNotes:current.preCallNotes});if(old.status!==current.status||old.statusNote!==current.statusNote||old.isSao!==current.isSao)await send('updateStatus',{status:current.status,note:current.statusNote||'',isSao:!!current.isSao});if(old.leadName!==current.leadName||old.sdrName!==current.sdrName||old.date!==current.date||old.meetingType!==current.meetingType)await send('updateCall',{leadName:current.leadName,sdrName:current.sdrName,date:current.date,meetingType:current.meetingType,isSao:!!current.isSao});v13Snapshots.set(current.id,JSON.parse(JSON.stringify(current)));}catch(e){if(e.code==='conflict'){await loadFromRemote();render();v13Toast('A reunião foi atualizada em outro lugar. Dados recentes carregados.');return;}throw e;}}
+async function v13SyncOne(call) {
+  const current = call;
+  const originalSnapshot = v13Snapshots.get(current.id);
+
+  /*
+   * Uma call que ainda não existe no servidor.
+   */
+  if (!originalSnapshot) {
+    const callSent = JSON.parse(JSON.stringify(current));
+
+    const result = await v13Fetch('createCall', {
+      call: callSent
+    });
+
+    /*
+     * Não substitui campos que o usuário possa ter alterado
+     * durante a requisição.
+     */
+    current.id = result.call.id;
+    current.leadId = result.call.leadId;
+    current.version = result.call.version;
+    current.createdAt = result.call.createdAt;
+    current.updatedAt = result.call.updatedAt;
+    current.ownerUserId = result.call.ownerUserId;
+    current.ownerEmail = result.call.ownerEmail;
+    current.ownerName = result.call.ownerName;
+
+    v13Snapshots.set(
+      current.id,
+      JSON.parse(JSON.stringify(result.call))
+    );
+
+    return;
+  }
+
+  const original = JSON.parse(
+    JSON.stringify(originalSnapshot)
+  );
+
+  let version = Number(original.version || 1);
+  let latestServerState = original;
+
+  /*
+   * Envia uma alteração sem substituir o estado local completo.
+   *
+   * O servidor devolve a call inteira, mas essa call pode representar
+   * um estado anterior às alterações feitas durante a requisição.
+   */
+  const send = async function (action, payload) {
+    const result = await v13Fetch(action, {
+      id: current.id,
+      expectedVersion: version,
+      ...payload
+    });
+
+    latestServerState = result.call;
+    version = Number(result.call.version || version + 1);
+
+    /*
+     * Atualiza somente metadados controlados pelo servidor.
+     * Não sobrescreve sc, cl, notas, status ou outros campos editáveis.
+     */
+    current.version = version;
+    current.updatedAt = result.call.updatedAt;
+
+    if (result.call.createdAt) {
+      current.createdAt = result.call.createdAt;
+    }
+
+    if (result.call.leadId) {
+      current.leadId = result.call.leadId;
+    }
+
+    if (result.call.ownerUserId) {
+      current.ownerUserId = result.call.ownerUserId;
+    }
+
+    if (result.call.ownerEmail) {
+      current.ownerEmail = result.call.ownerEmail;
+    }
+
+    if (result.call.ownerName) {
+      current.ownerName = result.call.ownerName;
+    }
+
+    /*
+     * Indicadores calculados pelo backend podem ser atualizados
+     * sem substituir as respostas locais do scorecard.
+     */
+    if (result.call.scoreTotal !== undefined) {
+      current.scoreTotal = result.call.scoreTotal;
+    }
+
+    if (result.call.scorePercent !== undefined) {
+      current.scorePercent = result.call.scorePercent;
+    }
+
+    if (result.call.scoreEvaluated !== undefined) {
+      current.scoreEvaluated = result.call.scoreEvaluated;
+    }
+
+    if (result.call.scoreMax !== undefined) {
+      current.scoreMax = result.call.scoreMax;
+    }
+
+    return result.call;
+  };
+
+  try {
+    /*
+     * Captura uma cópia de cada campo no momento do envio.
+     * Assim, mudanças posteriores não alteram o payload já enviado.
+     */
+
+    if (v13Json(original.cl) !== v13Json(current.cl)) {
+      const checklistSent = JSON.parse(
+        JSON.stringify(current.cl || {})
+      );
+
+      await send('updateChecklist', {
+        cl: checklistSent
+      });
+    }
+
+    if (v13Json(original.sc) !== v13Json(current.sc)) {
+      const scorecardSent = JSON.parse(
+        JSON.stringify(current.sc || {})
+      );
+
+      await send('updateScorecard', {
+        sc: scorecardSent
+      });
+    }
+
+    if (
+      v13Json(original.preCallNotes) !==
+      v13Json(current.preCallNotes)
+    ) {
+      const notesSent = JSON.parse(
+        JSON.stringify(current.preCallNotes || {})
+      );
+
+      await send('updatePreCall', {
+        preCallNotes: notesSent
+      });
+    }
+
+    if (
+      original.status !== current.status ||
+      original.statusNote !== current.statusNote ||
+      original.isSao !== current.isSao
+    ) {
+      await send('updateStatus', {
+        status: current.status,
+        note: current.statusNote || '',
+        isSao: Boolean(current.isSao)
+      });
+    }
+
+    if (
+      original.leadName !== current.leadName ||
+      original.sdrName !== current.sdrName ||
+      original.date !== current.date ||
+      original.meetingType !== current.meetingType
+    ) {
+      await send('updateCall', {
+        leadName: current.leadName,
+        sdrName: current.sdrName,
+        date: current.date,
+        meetingType: current.meetingType,
+        isSao: Boolean(current.isSao)
+      });
+    }
+
+    /*
+     * Snapshot representa exatamente o último estado confirmado
+     * pelo servidor, não o estado local potencialmente mais novo.
+     *
+     * Se o usuário clicou durante a requisição, a próxima sincronização
+     * detectará a diferença e enviará a alteração restante.
+     */
+    v13Snapshots.set(
+      current.id,
+      JSON.parse(JSON.stringify(latestServerState))
+    );
+
+  } catch (error) {
+    if (error.code === 'conflict') {
+      await loadFromRemote();
+      render();
+
+      v13Toast(
+        'A reunião foi atualizada em outro lugar. ' +
+        'Os dados mais recentes foram carregados.'
+      );
+
+      return;
+    }
+
+    throw error;
+  }
+}
 async function v13SyncChanges(){const changed=(state.calls||[]).filter(c=>{const o=v13Snapshots.get(c.id);return !o||v13Json(o)!==v13Json(c);});for(const c of changed)await v13SyncOne(c);localStorage.setItem(STORAGE_KEY,JSON.stringify(state));syncStatus='saved';updateSyncBadge();}
 function syncToRemote(){return v13SyncChanges();}
 async function validateTokenAndLoad(){return loadFromRemote();}
