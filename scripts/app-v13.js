@@ -469,6 +469,70 @@ function selectCall(id) {
 
 function renderBanner(){const container=document.getElementById('call-banner-container');container.innerHTML='';const call=ensureCallModel(getActiveCall());document.body.classList.toggle('has-active-call',!!call);if(call){const bar=mk('div','sticky-context');const title=mk('div','sticky-context-title');title.innerHTML=`<span class="sticky-context-dot"></span><span><b>${escapeHtml(call.leadName)}</b> · SDR: ${escapeHtml(call.sdrName||'—')}</span>${call.isSao?' <span class="badge b-sao">SAO</span>':''}`;const actions=mk('div','sticky-context-actions');const bPre=mk('button','btn-secondary','Pré-call');bPre.onclick=()=>{state.active=1;saveToStorage();render();window.scrollTo(0,0);};const bNotes=mk('button','btn-secondary','Notas');bNotes.onclick=()=>{state.active=1;saveToStorage();render();setTimeout(()=>document.getElementById('precall-notes-text')?.focus(),80);};const bScore=mk('button','btn-secondary','Scorecard');bScore.onclick=()=>{state.active=12;saveToStorage();render();window.scrollTo(0,0);};const bEnd=mk('button','btn-danger','Concluir reunião');bEnd.onclick=openEndCallModal;actions.appendChild(bPre);actions.appendChild(bNotes);actions.appendChild(bScore);actions.appendChild(bEnd);bar.appendChild(title);bar.appendChild(actions);container.appendChild(bar);}else{const sandbox=mk('div','call-banner-sandbox');sandbox.innerHTML=`<i class="ti ti-info-circle"></i> Navegando sem reunião ativa. Vá até <b>Minhas Calls</b> para iniciar ou retomar uma reunião.`;container.appendChild(sandbox);}}
 
+function getAdminCloserOptions(calls) {
+  const usersById = new Map();
+
+  (Array.isArray(calls) ? calls : []).forEach(call => {
+    if (!call || !call.ownerUserId) {
+      return;
+    }
+
+    if (!usersById.has(call.ownerUserId)) {
+      usersById.set(call.ownerUserId, {
+        id: call.ownerUserId,
+        name:
+          call.ownerName ||
+          call.ownerEmail ||
+          'Usuário sem nome',
+        email: call.ownerEmail || ''
+      });
+    }
+  });
+
+  /*
+   * Garante que o próprio Admin apareça mesmo quando ainda
+   * não possuir nenhuma reunião.
+   */
+  if (
+    v13User &&
+    v13User.id &&
+    !usersById.has(v13User.id)
+  ) {
+    usersById.set(v13User.id, {
+      id: v13User.id,
+      name: v13User.name || 'Minha conta',
+      email: v13User.email || ''
+    });
+  }
+
+  return Array.from(usersById.values()).sort(
+    (userA, userB) =>
+      String(userA.name).localeCompare(
+        String(userB.name),
+        'pt-BR'
+      )
+  );
+}
+
+function getSelectedCloserFilter() {
+  if (!v13User || v13User.role !== 'ADMIN') {
+    return v13User ? v13User.id : '';
+  }
+
+  /*
+   * Na primeira abertura do Admin, mostra somente
+   * as próprias reuniões.
+   */
+  const storedFilter =
+    sessionStorage.getItem('admin-closer-filter');
+
+  if (storedFilter === null) {
+    return v13User.id;
+  }
+
+  return storedFilter;
+}
+
 function renderDashboard() {
   const cnt = document.getElementById('content');
   cnt.innerHTML = '';
@@ -993,7 +1057,113 @@ function openEndCallModal(){const call=getActiveCall();if(!call)return;ensureCal
 function handleEndStatusChange(){const status=document.getElementById('ec-status')?.value;document.getElementById('ec-motivo-wrap')?.classList.toggle('hidden',status!=='Perdido');document.getElementById('ec-sao-wrap')?.classList.toggle('hidden',status==='No-Show');document.getElementById('ec-noshow-warning')?.classList.toggle('hidden',status!=='No-Show');}
 function submitEndCall(){const status=document.getElementById('ec-status').value;if(!status){alert('Selecione o status final da reunião antes de salvar.');return;}const motivo=document.getElementById('ec-motivo').value.trim();const call=getActiveCall();if(!call)return;ensureCallModel(call);const st=getScorecardStats(call);if(status!=='No-Show'&&!st.complete){alert(`Antes de concluir, preencha o scorecard completo. Hoje estão preenchidos ${st.evaluated}/${st.totalItems} critérios.`);state.active=12;closeModal();saveToStorage();render();window.scrollTo(0,0);return;}const oldStatus=call.status||'';if(status==='No-Show'&&hasAnyScorecardAnswer(call)){const ok=confirm('Esta reunião possui scorecard preenchido. Ao salvar como No-show, as respostas do scorecard serão limpas e não entrarão nos indicadores. Deseja continuar?');if(!ok)return;call.sc={};}call.status=status;call.statusNote=motivo;call.isSao=status==='No-Show'?false:!!document.getElementById('ec-sao')?.checked;call.motivoPerdido=status==='Perdido'?motivo:'';call.preCallNotes=call.preCallNotes||{text:PRECALL_NOTES_TEMPLATE,updatedAt:'',locked:false};call.preCallNotes.locked=true;call.statusHistory=Array.isArray(call.statusHistory)?call.statusHistory:[];if(oldStatus!==status||motivo){call.statusHistory.push({at:new Date().toISOString(),from:oldStatus,to:status,note:motivo});}state.activeCallId=null;state.active='dashboard';closeModal();saveToStorage();render();}
 
-function renderDashboard(){const cnt=document.getElementById('content');cnt.innerHTML='';cnt.appendChild(mk('div','mod-title','Cockpit de Vendas Consultivas'));cnt.appendChild(mk('div','mod-sub','Histórico, busca, conversões e aderência ao playbook.'));const topRow=mk('div','dash-actions');const topLeft=mk('div','dash-actions-left');const topNew=mk('button','btn-primary','<i class="ti ti-plus"></i> Novo Lead');topNew.title='Cadastrar um cliente/lead que ainda não existe.';topNew.onclick=initNewCallForm;topLeft.appendChild(topNew);const activeRunning=(Array.isArray(state.calls)?state.calls:[]).find(c=>isInProgress(c));if(activeRunning){const resume=mk('button','btn-secondary',`Retomar reunião: ${escapeHtml(activeRunning.leadName||'reunião em andamento')}`);resume.onclick=()=>{state.activeCallId=activeRunning.id;state.active=1;saveToStorage();render();window.scrollTo(0,0);};topLeft.appendChild(resume);}topRow.appendChild(topLeft);cnt.appendChild(topRow);let calls=(Array.isArray(state.calls)?state.calls:[]).map(ensureCallModel);const _fs=sessionStorage.getItem('fil-start')||'',_fe=sessionStorage.getItem('fil-end')||'';let filteredCalls=calls;if(_fs||_fe){filteredCalls=filteredCalls.filter(c=>{const dv=dateInputValue(c.date);if(!dv)return true;const t=new Date(dv+'T12:00:00').getTime();return t>=(_fs?new Date(_fs+'T00:00:00').getTime():0)&&t<=(_fe?new Date(_fe+'T23:59:59').getTime():Infinity);});}const searchTerm=(sessionStorage.getItem('call-search')||'').toLowerCase();if(searchTerm){filteredCalls=filteredCalls.filter(c=>(c.leadName||'').toLowerCase().includes(searchTerm)||(c.sdrName||'').toLowerCase().includes(searchTerm)||(c.status||'').toLowerCase().includes(searchTerm));}const convStats=getConversionStats(filteredCalls);let scoreSum=0,evaluatedCalls=0;filteredCalls.forEach(c=>{const st=scoreStatsFromCall(c);if(st.evaluated>0){scoreSum+=st.percent;evaluatedCalls++;}});const avgScore=evaluatedCalls?Math.round(scoreSum/evaluatedCalls):0;const grid=mk('div','db-grid');grid.appendChild(createMetricCard('Total de Reuniões',filteredCalls.length));grid.appendChild(createMetricCard('Demos Realizadas',convStats.demos));grid.appendChild(createMetricCard('Demo > SAO',convStats.demoSao+'%'));grid.appendChild(createMetricCard('SAO > Fechado',convStats.saoVenda+'%'));grid.appendChild(createMetricCard('Demo > Fechado',convStats.demoVenda+'%'));grid.appendChild(createMetricCard('Aderência Média Playbook',avgScore?avgScore+'%':'--'));cnt.appendChild(grid);if(filteredCalls.length>0){const chartsBlock=mk('div','charts-block');const chartsRow=mk('div','db-charts');[['chartStatus','Distribuição dos status'],['chartSdr','Volume comercial por SDR'],['chartConversions','Conversões do funil']].forEach(([id,title])=>{const cont=mk('div','chart-container');cont.appendChild(mk('div','chart-title',title));const wrap=mk('div','');wrap.style='position:relative;height:180px';const canvas=document.createElement('canvas');canvas.id=id;wrap.appendChild(canvas);cont.appendChild(wrap);chartsRow.appendChild(cont);});chartsBlock.appendChild(chartsRow);const evoContainer=mk('div','chart-container');evoContainer.style.marginBottom='28px';evoContainer.appendChild(mk('div','chart-title','Evolução mensal — aderência ao playbook x conversão'));const evoWrap=mk('div','');evoWrap.style='position:relative;height:220px';const evoCanvas=document.createElement('canvas');evoCanvas.id='chartEvolution';evoWrap.appendChild(evoCanvas);evoContainer.appendChild(evoWrap);evoContainer.appendChild(mk('div','evo-note','Aderência = média dos scorecards preenchidos. Demos realizadas excluem No-show e reuniões em andamento.'));chartsBlock.appendChild(evoContainer);cnt.appendChild(chartsBlock);setTimeout(()=>buildCharts(filteredCalls),50);}const panel=mk('div','history-panel');panel.appendChild(mk('div','mod-title','Histórico de Reuniões'));const toolbar=mk('div','history-toolbar');const left=mk('div','history-toolbar-left');const search=mk('div','search-wrap');search.innerHTML=`<i class="ti ti-search"></i><input type="search" id="call-search" class="search-input" placeholder="Pesquisar lead, clínica, SDR ou status..." value="${escapeHtml(sessionStorage.getItem('call-search')||'')}" />`;left.appendChild(search);[['fil-start','Data inicial',_fs],['fil-end','Data final',_fe]].forEach(x=>{const fg=mk('div','fil-grp');fg.innerHTML=`<label class="fil-lbl">${x[1]}</label>`;const inp=document.createElement('input');inp.type='date';inp.id=x[0];inp.className='fil-inp';inp.value=x[2];fg.appendChild(inp);left.appendChild(fg);});const bFil=mk('button','btn-secondary','Aplicar filtros');bFil.onclick=()=>{sessionStorage.setItem('fil-start',document.getElementById('fil-start')?.value||'');sessionStorage.setItem('fil-end',document.getElementById('fil-end')?.value||'');sessionStorage.setItem('calls-page','1');render();};left.appendChild(bFil);const right=mk('div','');const btnNew=mk('button','btn-primary','Novo Lead');btnNew.onclick=initNewCallForm;right.appendChild(btnNew);toolbar.appendChild(left);toolbar.appendChild(right);panel.appendChild(toolbar);cnt.appendChild(panel);setTimeout(()=>{const s=document.getElementById('call-search');if(s){let t=null;s.addEventListener('input',()=>{clearTimeout(t);t=setTimeout(()=>{sessionStorage.setItem('call-search',s.value.trim());sessionStorage.setItem('calls-page','1');render();},220);});}},0);if(filteredCalls.length===0){const empty=mk('div','empty-search-box','Nenhum lead ou reunião encontrado para esta busca.<br>');const b=mk('button','btn-primary','Novo Lead');b.onclick=initNewCallForm;empty.appendChild(b);cnt.appendChild(empty);return;}const pageSize=20,totalPages=Math.max(1,Math.ceil(filteredCalls.length/pageSize));let currentPage=parseInt(sessionStorage.getItem('calls-page')||'1',10);if(currentPage<1)currentPage=1;if(currentPage>totalPages)currentPage=totalPages;const callsToDisplay=[...filteredCalls].reverse().slice((currentPage-1)*pageSize,currentPage*pageSize);const tblWrap=mk('div','tbl-wrap history-table-wrap');const tbl=document.createElement('table');tbl.innerHTML='<thead><tr><th>Lead</th><th>SDR</th><th>SAO</th><th>Data</th><th>Status</th><th style="text-align:right;">⋮</th></tr></thead><tbody></tbody>';const tbody=tbl.querySelector('tbody');callsToDisplay.forEach(c=>{const tr=document.createElement('tr');let statusClass='b-progress';if(c.status==='Venda'||c.status==='Fechado')statusClass='b-venda';if(c.status==='Follow-up')statusClass='b-follow';if(c.status==='Perdido')statusClass='b-perdido';if(c.status==='No-Show')statusClass='b-noshow';const label=statusLabel(c.status);tr.innerHTML=`<td><b>${escapeHtml(c.leadName)}</b><div style="font-size:11px;color:#64748b;margin-top:3px">${escapeHtml(c.meetingType||'Reunião')}</div></td><td>${escapeHtml(c.sdrName)}</td><td>${c.isSao?'<span class="badge b-sao">SAO</span>':'<span style="color:#475569">—</span>'}</td><td class="date-short">${escapeHtml(formatDateShort(c.date))}</td><td><span class="badge ${statusClass}">${escapeHtml(label||'—')}</span></td><td class="actions-cell" style="text-align:right;"></td>`;tr.querySelector('td:last-child').appendChild(createActionMenu(c));tbody.appendChild(tr);});tblWrap.appendChild(tbl);cnt.appendChild(tblWrap);const pg=mk('div','pg-row');const startItem=(currentPage-1)*pageSize+1,endItem=Math.min(currentPage*pageSize,filteredCalls.length);pg.appendChild(mk('div','',`Mostrando ${startItem}-${endItem} de ${filteredCalls.length} reuniões`));const btns=mk('div','pg-btns');const prev=mk('button','pg-btn','Anterior');prev.disabled=currentPage===1;prev.onclick=()=>{sessionStorage.setItem('calls-page',String(currentPage-1));render();};btns.appendChild(prev);const cur=mk('button','pg-btn active',String(currentPage));btns.appendChild(cur);const next=mk('button','pg-btn','Próxima');next.disabled=currentPage===totalPages;next.onclick=()=>{sessionStorage.setItem('calls-page',String(currentPage+1));render();};btns.appendChild(next);pg.appendChild(btns);cnt.appendChild(pg);}
+function renderDashboard(){const cnt=document.getElementById('content');cnt.innerHTML='';cnt.appendChild(mk('div','mod-title','Cockpit de Vendas Consultivas'));cnt.appendChild(mk('div','mod-sub','Histórico, busca, conversões e aderência ao playbook.'));const topRow=mk('div','dash-actions');const topLeft=mk('div','dash-actions-left');const topNew=mk('button','btn-primary','<i class="ti ti-plus"></i> Novo Lead');topNew.title='Cadastrar um cliente/lead que ainda não existe.';topNew.onclick=initNewCallForm;topLeft.appendChild(topNew);const activeRunning=(Array.isArray(state.calls)?state.calls:[]).find(c=>isInProgress(c));if(activeRunning){const resume=mk('button','btn-secondary',`Retomar reunião: ${escapeHtml(activeRunning.leadName||'reunião em andamento')}`);resume.onclick=()=>{state.activeCallId=activeRunning.id;state.active=1;saveToStorage();render();window.scrollTo(0,0);};topLeft.appendChild(resume);}topRow.appendChild(topLeft);cnt.appendChild(topRow);let calls=(Array.isArray(state.calls)?state.calls:[]).map(ensureCallModel);
+const selectedCloserId =
+  getSelectedCloserFilter();
+
+if (
+  v13User &&
+  v13User.role === 'ADMIN' &&
+  selectedCloserId
+) {
+  calls = calls.filter(
+    call =>
+      String(call.ownerUserId || '') ===
+      String(selectedCloserId)
+  );
+}
+const _fs=sessionStorage.getItem('fil-start')||'',_fe=sessionStorage.getItem('fil-end')||'';let filteredCalls=calls;if(_fs||_fe){filteredCalls=filteredCalls.filter(c=>{const dv=dateInputValue(c.date);if(!dv)return true;const t=new Date(dv+'T12:00:00').getTime();return t>=(_fs?new Date(_fs+'T00:00:00').getTime():0)&&t<=(_fe?new Date(_fe+'T23:59:59').getTime():Infinity);});}const searchTerm=(sessionStorage.getItem('call-search')||'').toLowerCase();if(searchTerm){filteredCalls=filteredCalls.filter(c=>(c.leadName||'').toLowerCase().includes(searchTerm)||(c.sdrName||'').toLowerCase().includes(searchTerm)||(c.status||'').toLowerCase().includes(searchTerm));}const convStats=getConversionStats(filteredCalls);let scoreSum=0,evaluatedCalls=0;filteredCalls.forEach(c=>{const st=scoreStatsFromCall(c);if(st.evaluated>0){scoreSum+=st.percent;evaluatedCalls++;}});const avgScore=evaluatedCalls?Math.round(scoreSum/evaluatedCalls):0;const grid=mk('div','db-grid');grid.appendChild(createMetricCard('Total de Reuniões',filteredCalls.length));grid.appendChild(createMetricCard('Demos Realizadas',convStats.demos));grid.appendChild(createMetricCard('Demo > SAO',convStats.demoSao+'%'));grid.appendChild(createMetricCard('SAO > Fechado',convStats.saoVenda+'%'));grid.appendChild(createMetricCard('Demo > Fechado',convStats.demoVenda+'%'));grid.appendChild(createMetricCard('Aderência Média Playbook',avgScore?avgScore+'%':'--'));cnt.appendChild(grid);if(filteredCalls.length>0){const chartsBlock=mk('div','charts-block');const chartsRow=mk('div','db-charts');[['chartStatus','Distribuição dos status'],['chartSdr','Volume comercial por SDR'],['chartConversions','Conversões do funil']].forEach(([id,title])=>{const cont=mk('div','chart-container');cont.appendChild(mk('div','chart-title',title));const wrap=mk('div','');wrap.style='position:relative;height:180px';const canvas=document.createElement('canvas');canvas.id=id;wrap.appendChild(canvas);cont.appendChild(wrap);chartsRow.appendChild(cont);});chartsBlock.appendChild(chartsRow);const evoContainer=mk('div','chart-container');evoContainer.style.marginBottom='28px';evoContainer.appendChild(mk('div','chart-title','Evolução mensal — aderência ao playbook x conversão'));const evoWrap=mk('div','');evoWrap.style='position:relative;height:220px';const evoCanvas=document.createElement('canvas');evoCanvas.id='chartEvolution';evoWrap.appendChild(evoCanvas);evoContainer.appendChild(evoWrap);evoContainer.appendChild(mk('div','evo-note','Aderência = média dos scorecards preenchidos. Demos realizadas excluem No-show e reuniões em andamento.'));chartsBlock.appendChild(evoContainer);cnt.appendChild(chartsBlock);setTimeout(()=>buildCharts(filteredCalls),50);}const panel=mk('div','history-panel');panel.appendChild(mk('div','mod-title','Histórico de Reuniões'));const toolbar=mk('div','history-toolbar');const left=mk('div','history-toolbar-left');const search=mk('div','search-wrap');search.innerHTML=`<i class="ti ti-search"></i><input type="search" id="call-search" class="search-input" placeholder="Pesquisar lead, clínica, SDR ou status..." value="${escapeHtml(sessionStorage.getItem('call-search')||'')}" />`;left.appendChild(search);if (
+  v13User &&
+  v13User.role === 'ADMIN'
+) {
+  const closerGroup =
+    mk('div', 'fil-grp');
+
+  closerGroup.innerHTML = `
+    <label
+      class="fil-lbl"
+      for="admin-closer-filter"
+    >
+      Closer / usuário
+    </label>
+  `;
+
+  const closerSelect =
+    document.createElement('select');
+
+  closerSelect.id =
+    'admin-closer-filter';
+
+  closerSelect.className =
+    'fil-inp';
+
+  const allOption =
+    document.createElement('option');
+
+  allOption.value = '';
+  allOption.textContent =
+    'Todos os closers';
+
+  closerSelect.appendChild(allOption);
+
+  const ownOption =
+    document.createElement('option');
+
+  ownOption.value =
+    v13User.id;
+
+  ownOption.textContent =
+    'Minhas reuniões';
+
+  closerSelect.appendChild(ownOption);
+
+  getAdminCloserOptions(state.calls)
+    .filter(user =>
+      user.id !== v13User.id
+    )
+    .forEach(user => {
+      const option =
+        document.createElement('option');
+
+      option.value = user.id;
+
+      option.textContent =
+        user.name +
+        (user.email
+          ? ` — ${user.email}`
+          : '');
+
+      closerSelect.appendChild(option);
+    });
+
+  closerSelect.value =
+    getSelectedCloserFilter();
+
+  closerSelect.addEventListener(
+    'change',
+    function () {
+      sessionStorage.setItem(
+        'admin-closer-filter',
+        closerSelect.value
+      );
+
+      sessionStorage.setItem(
+        'calls-page',
+        '1'
+      );
+
+      render();
+    }
+  );
+
+  closerGroup.appendChild(
+    closerSelect
+  );
+
+  left.appendChild(
+    closerGroup
+  );
+}[['fil-start','Data inicial',_fs],['fil-end','Data final',_fe]].forEach(x=>{const fg=mk('div','fil-grp');fg.innerHTML=`<label class="fil-lbl">${x[1]}</label>`;const inp=document.createElement('input');inp.type='date';inp.id=x[0];inp.className='fil-inp';inp.value=x[2];fg.appendChild(inp);left.appendChild(fg);});const bFil=mk('button','btn-secondary','Aplicar filtros');bFil.onclick=()=>{sessionStorage.setItem('fil-start',document.getElementById('fil-start')?.value||'');sessionStorage.setItem('fil-end',document.getElementById('fil-end')?.value||'');sessionStorage.setItem('calls-page','1');render();};left.appendChild(bFil);const right=mk('div','');const btnNew=mk('button','btn-primary','Novo Lead');btnNew.onclick=initNewCallForm;right.appendChild(btnNew);toolbar.appendChild(left);toolbar.appendChild(right);panel.appendChild(toolbar);cnt.appendChild(panel);setTimeout(()=>{const s=document.getElementById('call-search');if(s){let t=null;s.addEventListener('input',()=>{clearTimeout(t);t=setTimeout(()=>{sessionStorage.setItem('call-search',s.value.trim());sessionStorage.setItem('calls-page','1');render();},220);});}},0);if(filteredCalls.length===0){const empty=mk('div','empty-search-box','Nenhum lead ou reunião encontrado para esta busca.<br>');const b=mk('button','btn-primary','Novo Lead');b.onclick=initNewCallForm;empty.appendChild(b);cnt.appendChild(empty);return;}const pageSize=20,totalPages=Math.max(1,Math.ceil(filteredCalls.length/pageSize));let currentPage=parseInt(sessionStorage.getItem('calls-page')||'1',10);if(currentPage<1)currentPage=1;if(currentPage>totalPages)currentPage=totalPages;const callsToDisplay=[...filteredCalls].reverse().slice((currentPage-1)*pageSize,currentPage*pageSize);const tblWrap=mk('div','tbl-wrap history-table-wrap');const tbl=document.createElement('table');tbl.innerHTML='<thead><tr><th>Lead</th><th>SDR</th><th>SAO</th><th>Data</th><th>Status</th><th style="text-align:right;">⋮</th></tr></thead><tbody></tbody>';const tbody=tbl.querySelector('tbody');callsToDisplay.forEach(c=>{const tr=document.createElement('tr');let statusClass='b-progress';if(c.status==='Venda'||c.status==='Fechado')statusClass='b-venda';if(c.status==='Follow-up')statusClass='b-follow';if(c.status==='Perdido')statusClass='b-perdido';if(c.status==='No-Show')statusClass='b-noshow';const label=statusLabel(c.status);tr.innerHTML=`<td><b>${escapeHtml(c.leadName)}</b><div style="font-size:11px;color:#64748b;margin-top:3px">${escapeHtml(c.meetingType||'Reunião')}</div></td><td>${escapeHtml(c.sdrName)}</td><td>${c.isSao?'<span class="badge b-sao">SAO</span>':'<span style="color:#475569">—</span>'}</td><td class="date-short">${escapeHtml(formatDateShort(c.date))}</td><td><span class="badge ${statusClass}">${escapeHtml(label||'—')}</span></td><td class="actions-cell" style="text-align:right;"></td>`;tr.querySelector('td:last-child').appendChild(createActionMenu(c));tbody.appendChild(tr);});tblWrap.appendChild(tbl);cnt.appendChild(tblWrap);const pg=mk('div','pg-row');const startItem=(currentPage-1)*pageSize+1,endItem=Math.min(currentPage*pageSize,filteredCalls.length);pg.appendChild(mk('div','',`Mostrando ${startItem}-${endItem} de ${filteredCalls.length} reuniões`));const btns=mk('div','pg-btns');const prev=mk('button','pg-btn','Anterior');prev.disabled=currentPage===1;prev.onclick=()=>{sessionStorage.setItem('calls-page',String(currentPage-1));render();};btns.appendChild(prev);const cur=mk('button','pg-btn active',String(currentPage));btns.appendChild(cur);const next=mk('button','pg-btn','Próxima');next.disabled=currentPage===totalPages;next.onclick=()=>{sessionStorage.setItem('calls-page',String(currentPage+1));render();};btns.appendChild(next);pg.appendChild(btns);cnt.appendChild(pg);}
 function buildCharts(calls){
   if(window.charts.status)window.charts.status.destroy(); if(window.charts.sdr)window.charts.sdr.destroy(); if(window.charts.evolution)window.charts.evolution.destroy(); if(window.charts.conversions)window.charts.conversions.destroy(); const ctxStatus=document.getElementById('chartStatus'),ctxSdr=document.getElementById('chartSdr'); if(!ctxStatus||!ctxSdr)return; const statusCounts={'Venda':0,'Follow-up':0,'Perdido':0,'No-Show':0,'Em andamento':0}; calls.forEach(c=>{if(statusCounts[c.status]!==undefined)statusCounts[c.status]++;}); window.charts.status=new Chart(ctxStatus,{type:'doughnut',data:{labels:Object.keys(statusCounts),datasets:[{data:Object.values(statusCounts),backgroundColor:['#10b981','#f59e0b','#ef4444','#64748b','#3b82f6'],borderWidth:0}]},options:{responsive:true,plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{size:11}}}}}}); const sdrData={}; calls.forEach(c=>{if(!sdrData[c.sdrName])sdrData[c.sdrName]={saos:0,vendas:0}; if(c.isSao)sdrData[c.sdrName].saos++; if(c.status==='Venda')sdrData[c.sdrName].vendas++;}); window.charts.sdr=new Chart(ctxSdr,{type:'bar',data:{labels:Object.keys(sdrData),datasets:[{label:'Oportunidades SAO',data:Object.values(sdrData).map(d=>d.saos),backgroundColor:'#06b6d4'},{label:'Vendas Fechadas',data:Object.values(sdrData).map(d=>d.vendas),backgroundColor:'#10b981'}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:'#94a3b8'},grid:{display:false}},y:{ticks:{color:'#94a3b8',stepSize:1},grid:{color:'#1e293b'}}},plugins:{legend:{labels:{color:'#94a3b8'}}}}}); const ctxConversions=document.getElementById('chartConversions'); if(ctxConversions){const cs=getConversionStats(calls); window.charts.conversions=new Chart(ctxConversions,{type:'bar',data:{labels:['Demo > SAO','SAO > Venda','Demo > Venda'],datasets:[{label:'Conversão (%)',data:[cs.demoSao,cs.saoVenda,cs.demoVenda],backgroundColor:['#06b6d4','#10b981','#8b5cf6']}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:'#94a3b8'},grid:{display:false}},y:{min:0,max:100,ticks:{color:'#94a3b8'},grid:{color:'#1e293b'}}},plugins:{legend:{display:false}}}});} const ctxEvo=document.getElementById('chartEvolution'); if(ctxEvo){const evo=buildEvolutionData(calls); window.charts.evolution=new Chart(ctxEvo,{type:'line',data:{labels:evo.labels,datasets:[{label:'Aderência ao playbook (%)',data:evo.adherence,borderColor:'#8b5cf6',backgroundColor:'rgba(139,92,246,0.15)',tension:0.25,spanGaps:true},{label:'Conversão (Venda/SAO) (%)',data:evo.conversion,borderColor:'#10b981',backgroundColor:'rgba(16,185,129,0.15)',tension:0.25,spanGaps:true}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:'#94a3b8'},grid:{display:false}},y:{min:0,max:100,ticks:{color:'#94a3b8'},grid:{color:'#1e293b'}}},plugins:{legend:{labels:{color:'#94a3b8'}}}}});}
 }
