@@ -1237,7 +1237,36 @@ initV13AccessGate();
 
 function appendContextualModuleActions(moduleId,cnt){const activeCall=getActiveCall();if(moduleId===1&&activeCall){renderPreCallNotes(cnt);const row=mk('div','context-end-actions');const btn=mk('button','btn-primary','Continuar para Scorecard');btn.onclick=()=>{state.active=12;saveToStorage();render();window.scrollTo(0,0);};row.appendChild(btn);cnt.appendChild(row);}if(moduleId===12&&activeCall){const row=mk('div','context-end-actions');const btn=mk('button','btn-primary','Concluir reunião');btn.onclick=openEndCallModal;row.appendChild(btn);cnt.appendChild(row);}}
 function renderPreCallNotes(cnt){const call=ensureCallModel(getActiveCall());if(!call)return;const box=mk('div','precall-notes-box');box.appendChild(mk('div','sec-h','Notas de preparação da reunião'));box.appendChild(mk('div','sec-sub','Use este espaço para perguntas, hipóteses e pontos que deseja validar durante a reunião.'));const locked=call.status&&!isInProgress(call);if(locked){box.appendChild(mk('div','readonly-note',escapeHtml((call.preCallNotes&&call.preCallNotes.text)||'')));box.appendChild(mk('div','sec-sub','Reunião concluída: notas em modo somente leitura.'));}else{const ta=document.createElement('textarea');ta.id='precall-notes-text';ta.className='md-input';ta.value=(call.preCallNotes&&call.preCallNotes.text)||PRECALL_NOTES_TEMPLATE;ta.addEventListener('input',()=>{call.preCallNotes={text:ta.value,updatedAt:new Date().toISOString(),locked:false};saveToStorage();});box.appendChild(ta);}cnt.appendChild(box);}
-function createActionMenu(call){call=ensureCallModel(call);const wrap=mk('div','action-menu-wrap');const btn=mk('button','action-menu-btn','⋮');btn.onclick=(e)=>{e.stopPropagation();closeAllActionMenus();const menu=mk('div','action-menu');const items=[];if(isInProgress(call)){items.push(['Retomar reunião',()=>{state.activeCallId=call.id;state.active=1;saveToStorage();render();window.scrollTo(0,0);}]);}items.push(['Ver detalhes',()=>openDetailsModal(call.id)],['Revisar checklist',()=>openChecklistReviewModal(call.id)],['Editar dados',()=>openEditCallModal(call.id)],['Atualizar status',()=>openStatusModal(call.id)],['Adicionar nova reunião',()=>addMeetingFromCall(call.id)],['Apagar reunião',()=>deleteCall(call.id)]);items.forEach(([label,fn])=>{const b=mk('button','',label);b.onclick=(ev)=>{ev.stopPropagation();closeAllActionMenus();fn();};menu.appendChild(b);});wrap.appendChild(menu);};wrap.appendChild(btn);return wrap;}
+function createActionMenu(call){call=ensureCallModel(call);const wrap=mk('div','action-menu-wrap');const btn=mk('button','action-menu-btn','⋮');btn.onclick=(e)=>{e.stopPropagation();closeAllActionMenus();const menu=mk('div','action-menu');const items=[];if(isInProgress(call)){items.push(['Retomar reunião',()=>{state.activeCallId=call.id;state.active=1;saveToStorage();render();window.scrollTo(0,0);}]);}items.push(
+  [
+    'Ver detalhes',
+    () => openDetailsModal(call.id)
+  ],
+  [
+    'Revisar checklist',
+    () => openChecklistReviewModal(call.id)
+  ],
+  [
+    'Ver scorecard preenchido',
+    () => openScorecardReviewModal(call.id)
+  ],
+  [
+    'Editar dados',
+    () => openEditCallModal(call.id)
+  ],
+  [
+    'Atualizar status',
+    () => openStatusModal(call.id)
+  ],
+  [
+    'Adicionar nova reunião',
+    () => addMeetingFromCall(call.id)
+  ],
+  [
+    'Apagar reunião',
+    () => deleteCall(call.id)
+  ]
+);items.forEach(([label,fn])=>{const b=mk('button','',label);b.onclick=(ev)=>{ev.stopPropagation();closeAllActionMenus();fn();};menu.appendChild(b);});wrap.appendChild(menu);};wrap.appendChild(btn);return wrap;}
 function openChecklistReviewModal(id){const c=ensureCallModel(state.calls.find(x=>x.id===id));if(!c)return;const pre=M.find(m=>m.id===1);const clSec=pre&&pre.s?pre.s.find(s=>s.t==='CL'):null;let html='<div class="md-form"><div class="md-info">Visualização do checklist preenchido. Esta ação não retoma nem reabre a reunião.</div><div class="checklist-review-list">';(clSec&&clSec.items?clSec.items:[]).forEach((item,i)=>{const key=`cl-1-${i}`;const done=c.cl&&c.cl[key]===true;html+=`<div class="checklist-review-item ${done?'done':''}"><span class="checklist-review-icon">${done?'✓':'○'}</span><span>${escapeHtml(item)}</span></div>`;});html+='</div><div class="md-btns"><button class="btn-secondary" onclick="closeModal()">Fechar</button></div></div>';showModal('Checklist preenchido',html);const box=document.querySelector('#modal-container .md-box');if(box)box.style.maxWidth='680px';}
 function openScorecardReviewModal(id) {
   const call = ensureCallModel(
