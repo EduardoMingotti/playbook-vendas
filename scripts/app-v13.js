@@ -1239,6 +1239,341 @@ function appendContextualModuleActions(moduleId,cnt){const activeCall=getActiveC
 function renderPreCallNotes(cnt){const call=ensureCallModel(getActiveCall());if(!call)return;const box=mk('div','precall-notes-box');box.appendChild(mk('div','sec-h','Notas de preparação da reunião'));box.appendChild(mk('div','sec-sub','Use este espaço para perguntas, hipóteses e pontos que deseja validar durante a reunião.'));const locked=call.status&&!isInProgress(call);if(locked){box.appendChild(mk('div','readonly-note',escapeHtml((call.preCallNotes&&call.preCallNotes.text)||'')));box.appendChild(mk('div','sec-sub','Reunião concluída: notas em modo somente leitura.'));}else{const ta=document.createElement('textarea');ta.id='precall-notes-text';ta.className='md-input';ta.value=(call.preCallNotes&&call.preCallNotes.text)||PRECALL_NOTES_TEMPLATE;ta.addEventListener('input',()=>{call.preCallNotes={text:ta.value,updatedAt:new Date().toISOString(),locked:false};saveToStorage();});box.appendChild(ta);}cnt.appendChild(box);}
 function createActionMenu(call){call=ensureCallModel(call);const wrap=mk('div','action-menu-wrap');const btn=mk('button','action-menu-btn','⋮');btn.onclick=(e)=>{e.stopPropagation();closeAllActionMenus();const menu=mk('div','action-menu');const items=[];if(isInProgress(call)){items.push(['Retomar reunião',()=>{state.activeCallId=call.id;state.active=1;saveToStorage();render();window.scrollTo(0,0);}]);}items.push(['Ver detalhes',()=>openDetailsModal(call.id)],['Revisar checklist',()=>openChecklistReviewModal(call.id)],['Editar dados',()=>openEditCallModal(call.id)],['Atualizar status',()=>openStatusModal(call.id)],['Adicionar nova reunião',()=>addMeetingFromCall(call.id)],['Apagar reunião',()=>deleteCall(call.id)]);items.forEach(([label,fn])=>{const b=mk('button','',label);b.onclick=(ev)=>{ev.stopPropagation();closeAllActionMenus();fn();};menu.appendChild(b);});wrap.appendChild(menu);};wrap.appendChild(btn);return wrap;}
 function openChecklistReviewModal(id){const c=ensureCallModel(state.calls.find(x=>x.id===id));if(!c)return;const pre=M.find(m=>m.id===1);const clSec=pre&&pre.s?pre.s.find(s=>s.t==='CL'):null;let html='<div class="md-form"><div class="md-info">Visualização do checklist preenchido. Esta ação não retoma nem reabre a reunião.</div><div class="checklist-review-list">';(clSec&&clSec.items?clSec.items:[]).forEach((item,i)=>{const key=`cl-1-${i}`;const done=c.cl&&c.cl[key]===true;html+=`<div class="checklist-review-item ${done?'done':''}"><span class="checklist-review-icon">${done?'✓':'○'}</span><span>${escapeHtml(item)}</span></div>`;});html+='</div><div class="md-btns"><button class="btn-secondary" onclick="closeModal()">Fechar</button></div></div>';showModal('Checklist preenchido',html);const box=document.querySelector('#modal-container .md-box');if(box)box.style.maxWidth='680px';}
+function openScorecardReviewModal(id) {
+  const call = ensureCallModel(
+    state.calls.find(item => item.id === id)
+  );
+
+  if (!call) {
+    return;
+  }
+
+  const scorecardDefinition = getScorecardDefinition();
+  const criteria =
+    scorecardDefinition &&
+    Array.isArray(scorecardDefinition.items)
+      ? scorecardDefinition.items
+      : [];
+
+  const stats = getScorecardStats(call);
+
+  const scorecardExempt =
+    call.status === 'No-Show' ||
+    call.status === 'Fora de ICP';
+
+  let rowsHtml = '';
+
+  criteria.forEach((criterion, index) => {
+    const key = `sc-12-${index}`;
+
+    const hasValue =
+      call.sc &&
+      call.sc[key] !== undefined &&
+      call.sc[key] !== null;
+
+    const value = hasValue
+      ? Number(call.sc[key])
+      : null;
+
+    let scoreColor = '#64748b';
+    let scoreBackground = '#1e293b';
+    let scoreBorder = '#334155';
+    let scoreLabel = '—';
+
+    if (value === 2) {
+      scoreColor = '#4ade80';
+      scoreBackground = 'rgba(34,197,94,.12)';
+      scoreBorder = '#166534';
+      scoreLabel = '2';
+    }
+
+    if (value === 1) {
+      scoreColor = '#fbbf24';
+      scoreBackground = 'rgba(245,158,11,.12)';
+      scoreBorder = '#92400e';
+      scoreLabel = '1';
+    }
+
+    if (value === 0) {
+      scoreColor = '#f87171';
+      scoreBackground = 'rgba(239,68,68,.12)';
+      scoreBorder = '#991b1b';
+      scoreLabel = '0';
+    }
+
+    rowsHtml += `
+      <div
+        style="
+          display:grid;
+          grid-template-columns:minmax(0,1fr) 42px;
+          gap:12px;
+          align-items:center;
+          padding:11px 12px;
+          border:1px solid #334155;
+          border-radius:8px;
+          background:#111827;
+        "
+      >
+        <div>
+          <div
+            style="
+              font-size:11px;
+              color:#64748b;
+              margin-bottom:3px;
+            "
+          >
+            Critério ${index + 1}
+          </div>
+
+          <div
+            style="
+              font-size:12px;
+              line-height:1.45;
+              color:#e2e8f0;
+            "
+          >
+            ${escapeHtml(criterion)}
+          </div>
+        </div>
+
+        <div
+          title="${
+            value === 2
+              ? 'Bem executado'
+              : value === 1
+                ? 'Parcialmente executado'
+                : value === 0
+                  ? 'Não executado'
+                  : 'Não avaliado'
+          }"
+          style="
+            width:38px;
+            height:38px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            border:1px solid ${scoreBorder};
+            border-radius:8px;
+            background:${scoreBackground};
+            color:${scoreColor};
+            font-size:16px;
+            font-weight:800;
+          "
+        >
+          ${scoreLabel}
+        </div>
+      </div>
+    `;
+  });
+
+  let contextualMessage = '';
+
+  if (scorecardExempt) {
+    contextualMessage = `
+      <div class="md-info">
+        Esta reunião foi concluída como
+        <b>${escapeHtml(statusLabel(call.status))}</b>
+        e não utiliza scorecard para os indicadores de aderência.
+      </div>
+    `;
+  } else if (stats.evaluated === 0) {
+    contextualMessage = `
+      <div class="md-warning">
+        Nenhum critério do scorecard foi preenchido nesta reunião.
+      </div>
+    `;
+  } else if (!stats.complete) {
+    contextualMessage = `
+      <div class="md-warning">
+        Este scorecard está incompleto:
+        <b>${stats.evaluated} de ${stats.totalItems}</b>
+        critérios foram avaliados.
+      </div>
+    `;
+  }
+
+  const percentageColor =
+    stats.evaluated === 0
+      ? '#64748b'
+      : stats.percent >= 80
+        ? '#4ade80'
+        : stats.percent >= 60
+          ? '#fbbf24'
+          : '#f87171';
+
+  const percentageText =
+    stats.evaluated > 0
+      ? `${stats.percent}%`
+      : '—';
+
+  showModal(
+    `Scorecard — ${call.leadName || 'Reunião'}`,
+    `
+      <div class="md-form">
+        ${contextualMessage}
+
+        <div
+          style="
+            display:grid;
+            grid-template-columns:repeat(3,minmax(0,1fr));
+            gap:10px;
+            margin-bottom:16px;
+          "
+        >
+          <div
+            style="
+              padding:12px;
+              border:1px solid #334155;
+              border-radius:8px;
+              background:#111827;
+            "
+          >
+            <div
+              style="
+                font-size:10px;
+                color:#64748b;
+                text-transform:uppercase;
+                letter-spacing:.04em;
+              "
+            >
+              Aderência
+            </div>
+
+            <div
+              style="
+                margin-top:4px;
+                font-size:22px;
+                font-weight:800;
+                color:${percentageColor};
+              "
+            >
+              ${percentageText}
+            </div>
+          </div>
+
+          <div
+            style="
+              padding:12px;
+              border:1px solid #334155;
+              border-radius:8px;
+              background:#111827;
+            "
+          >
+            <div
+              style="
+                font-size:10px;
+                color:#64748b;
+                text-transform:uppercase;
+                letter-spacing:.04em;
+              "
+            >
+              Pontuação
+            </div>
+
+            <div
+              style="
+                margin-top:4px;
+                font-size:22px;
+                font-weight:800;
+                color:#e2e8f0;
+              "
+            >
+              ${stats.points}/${stats.max}
+            </div>
+          </div>
+
+          <div
+            style="
+              padding:12px;
+              border:1px solid #334155;
+              border-radius:8px;
+              background:#111827;
+            "
+          >
+            <div
+              style="
+                font-size:10px;
+                color:#64748b;
+                text-transform:uppercase;
+                letter-spacing:.04em;
+              "
+            >
+              Avaliados
+            </div>
+
+            <div
+              style="
+                margin-top:4px;
+                font-size:22px;
+                font-weight:800;
+                color:#e2e8f0;
+              "
+            >
+              ${stats.evaluated}/${stats.totalItems}
+            </div>
+          </div>
+        </div>
+
+        <div
+          style="
+            display:flex;
+            gap:14px;
+            flex-wrap:wrap;
+            margin-bottom:14px;
+            font-size:11px;
+            color:#94a3b8;
+          "
+        >
+          <span>
+            <b style="color:#4ade80;">2</b>
+            = bem executado
+          </span>
+
+          <span>
+            <b style="color:#fbbf24;">1</b>
+            = parcialmente executado
+          </span>
+
+          <span>
+            <b style="color:#f87171;">0</b>
+            = não executado
+          </span>
+
+          <span>
+            <b style="color:#64748b;">—</b>
+            = não avaliado
+          </span>
+        </div>
+
+        <div
+          style="
+            display:grid;
+            gap:8px;
+          "
+        >
+          ${rowsHtml}
+        </div>
+
+        <div class="md-btns">
+          <button
+            class="btn-secondary"
+            onclick="closeModal()"
+          >
+            Fechar
+          </button>
+        </div>
+      </div>
+    `
+  );
+
+  const modalBox = document.querySelector(
+    '#modal-container .md-box'
+  );
+
+  if (modalBox) {
+    modalBox.style.maxWidth = '820px';
+  }
+}
 function openDetailsModal(id){const c=ensureCallModel(state.calls.find(x=>x.id===id));if(!c)return;const st=scoreStatsFromCall(c);const hist=(Array.isArray(c.statusHistory)?c.statusHistory:[]).map(h=>`<div class="status-history-item"><b>${formatDateShort(h.at)}</b> — ${escapeHtml(h.from?h.from+' → '+statusLabel(h.to):statusLabel(h.to)||'')}<br>${escapeHtml(h.note||'')}</div>`).join('')||'<div class="sec-sub">Sem histórico registrado.</div>';showModal('Detalhes da reunião',`<div class="md-form"><div class="detail-grid"><div class="detail-item"><div class="detail-label">Lead</div><div class="detail-value">${escapeHtml(c.leadName)}</div></div><div class="detail-item"><div class="detail-label">SDR</div><div class="detail-value">${escapeHtml(c.sdrName||'—')}</div></div><div class="detail-item"><div class="detail-label">Data</div><div class="detail-value">${escapeHtml(formatDateShort(c.date))}</div></div><div class="detail-item"><div class="detail-label">Status atual</div><div class="detail-value">${escapeHtml(statusLabel(c.status))}</div></div></div><div class="md-group"><label class="md-label">Observação da reunião/status</label><div class="readonly-note">${escapeHtml(c.statusNote||c.motivoPerdido||'—')}</div></div><div class="md-group"><label class="md-label">Notas de preparação da reunião</label><div class="readonly-note">${escapeHtml((c.preCallNotes&&c.preCallNotes.text)||'—')}</div></div><div class="md-group"><label class="md-label">Scorecard</label><div class="readonly-note">${st.total}/${st.max} pontos · ${st.percent}% · ${st.evaluated}/12 critérios avaliados</div></div><div class="md-group"><label class="md-label">Histórico de status</label><div class="status-history-list">${hist}</div></div><div class="md-btns"><button class="btn-secondary" onclick="closeModal()">Fechar</button></div></div>`);const box=document.querySelector('#modal-container .md-box');if(box)box.style.maxWidth='760px';}
 function openStatusModal(id){const c=ensureCallModel(state.calls.find(x=>x.id===id));if(!c)return;const opts=['Em andamento','Follow-up','Venda','Perdido','Fora de ICP','No-Show'].map(s=>`<option value="${s}" ${c.status===s?'selected':''}>${statusLabel(s)}</option>`).join('');showModal('Atualizar status',`<div class="md-form"><div class="md-group"><label class="md-label">Novo status</label><select id="st-status" class="md-input">${opts}</select></div><div class="md-group"><label class="md-label">Nota desta atualização</label><textarea id="st-note" class="md-input" rows="4" placeholder="Ex: cliente pediu retorno, objeção, motivo da perda...">${escapeHtml(c.statusNote||c.motivoPerdido||'')}</textarea></div><div class="md-btns"><button class="btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn-primary" onclick="submitStatusUpdate('${id}')">Salvar status</button></div></div>`);}
 function submitStatusUpdate(id){const c=ensureCallModel(state.calls.find(x=>x.id===id));if(!c)return;const old=c.status||'';const ns=document.getElementById('st-status').value;const note=document.getElementById('st-note').value.trim();if(ns==='Fora de ICP'&&!note){alert('Informe o motivo da desqualificação.');return;}const scorecardExempt=ns==='No-Show'||ns==='Fora de ICP';if(scorecardExempt&&hasAnyScorecardAnswer(c)){const ok=confirm('Este status não utiliza scorecard. Deseja limpar as respostas já preenchidas?');if(!ok)return;c.sc={};}c.status=ns;c.statusNote=note;c.isSao=scorecardExempt?false:c.isSao;c.motivoPerdido=ns==='Perdido'?note:'';c.statusHistory=Array.isArray(c.statusHistory)?c.statusHistory:[];c.statusHistory.push({at:new Date().toISOString(),from:old,to:ns,note});closeModal();saveToStorage();render();}
